@@ -1,5 +1,6 @@
 use combine::parser;
 use combine::attempt;
+use combine::parser::choice::or;
 use combine::{not_followed_by, optional};
 use combine::parser::char::{spaces, digit, char, letter};
 use combine::{between, choice, many1, sep_by, ParseError, Parser};
@@ -10,6 +11,7 @@ pub enum Expr {
   Id(String),
   Decimal(f64),
   Integer(usize),
+  QuotedString(String),
   Array(Vec<Expr>),
   Pair(Box<Expr>, Box<Expr>),
 }
@@ -50,6 +52,14 @@ fn decimal_part<I>() -> impl Parser<I, Output = f64>
   })
 }
 
+fn quoted_string<I>() -> impl Parser<I, Output = String>
+  where I: Stream<Token = char>,
+        I::Error: ParseError<I::Token, I::Range, I::Position>,
+{
+  between(char('"'), char('"'), many1(or(letter(), digit())))
+    .map(|chars: Vec<char>| chars.into_iter().collect())
+}
+
 fn decimal<I>() -> impl Parser<I, Output = f64>
   where I: Stream<Token = char>,
         I::Error: ParseError<I::Token, I::Range, I::Position>,
@@ -82,6 +92,7 @@ fn expr_<'a, I>() -> impl Parser<I, Output = Expr>
     attempt(integer().map(Expr::Integer)),
     decimal().map(Expr::Decimal),
     word.map(Expr::Id),
+    quoted_string().map(Expr::QuotedString),
     array.map(Expr::Array),
     pair,
   ))
@@ -158,6 +169,16 @@ mod tests {
   }
 
   #[test]
+  fn test_quoted_string() {
+    let result = quoted_string().parse("\"hello\"").unwrap().0;
+    assert_eq!(result, "hello");
+    let result = quoted_string().parse("\"world\"").unwrap().0;
+    assert_eq!(result, "world");
+    let result = quoted_string().parse("\"hey12\"").unwrap().0;
+    assert_eq!(result, "hey12");
+  }
+
+  #[test]
   fn test_expr() {
     let e = expr().parse("12").unwrap().0;
     assert_eq!(e, Expr::Integer(12));
@@ -167,6 +188,10 @@ mod tests {
     assert_eq!(e, Expr::Decimal(0.43));
     let e = expr().parse("50.").unwrap().0;
     assert_eq!(e, Expr::Decimal(50.0));
+    let e = expr().parse("foo").unwrap().0;
+    assert_eq!(e, Expr::Id("foo".to_string()));
+    let e = expr().parse("\"hello\"").unwrap().0;
+    assert_eq!(e, Expr::QuotedString("hello".to_string()));
   }
 
   #[test]

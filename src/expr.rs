@@ -13,10 +13,10 @@ use combine::{not_followed_by, optional};
 use combine::parser::char::{spaces, newline, digit, char, letter};
 use combine::{between, choice, many1, sep_by, ParseError, Parser};
 use combine::stream::Stream;
-use fvm_sdk::event;
+// use fvm_sdk::event;
 
-#[derive(Debug, PartialEq)]
-pub struct Token(String, String, usize);
+// #[derive(Debug, PartialEq)]
+// pub struct Token(String, String, usize);
 
 // #[derive(Debug, PartialEq)]
 // pub enum Contract {
@@ -45,6 +45,12 @@ pub struct Token(String, String, usize);
 //   DealActivated,
 //   DealTerminated,
 // }
+
+#[derive(Debug, PartialEq)]
+pub struct EventOp {
+  name: String,
+  event: Expr,
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Expr {
@@ -81,6 +87,19 @@ parser!{
 // {
 //   spaces().with(string("close")).map(|_| Contract::Close)
 // }
+
+fn when<T>() -> impl Parser<T, Output = EventOp>
+  where T: Stream<Token = char>,
+        T::Error: ParseError<T::Token, T::Range, T::Position>,
+{
+  spaces()
+    .with(string("when"))
+    .and(spaces().with(event()))
+    .map(|(name, event)| EventOp{
+      name: name.to_string(),
+      event,
+    })
+}
 
 fn event<I>() -> impl Parser<I, Output = Expr>
   where I: Stream<Token = char>,
@@ -302,6 +321,28 @@ mod tests {
     dict.insert("key".to_string(), Expr::Dict(nested));
     let expected = Expr::Dict(dict);
     assert_eq!(e, expected);
+  }
+
+  #[test]
+  fn test_when() {
+    let e = when().parse(r#"when Deposit {
+      from: "addressA",
+      token: {
+        name: "world",
+        ticker: "WRLD",
+        amount: 123
+      }
+    }"#).unwrap().0;
+    let mut args = HashMap::new();
+    args.insert("from".to_string(), Expr::QuotedString("addressA".to_string()));
+    let mut token = HashMap::new();
+    token.insert("name".to_string(), Expr::QuotedString("world".to_string()));
+    token.insert("ticker".to_string(), Expr::QuotedString("WRLD".to_string()));
+    token.insert("amount".to_string(), Expr::Integer(123));
+    args.insert("token".to_string(), Expr::Dict(token));
+    let event = Expr::Event{ name: "Deposit".to_string(), args };
+    let event_op = EventOp{ name: "when".to_string(), event };
+    assert_eq!(e, event_op);
   }
 
   #[test]

@@ -1,10 +1,50 @@
+use std::collections::HashMap;
+use core::ops::Fn;
+use std::hash::Hash;
+
+use combine::one_of;
 use combine::parser;
 use combine::attempt;
+
+use combine::parser::char::string;
 use combine::parser::choice::or;
+use combine::token;
 use combine::{not_followed_by, optional};
-use combine::parser::char::{spaces, digit, char, letter};
+use combine::parser::char::{spaces, newline, digit, char, letter};
 use combine::{between, choice, many1, sep_by, ParseError, Parser};
 use combine::stream::Stream;
+use fvm_sdk::event;
+
+#[derive(Debug, PartialEq)]
+pub struct Token(String, String, usize);
+
+// #[derive(Debug, PartialEq)]
+// pub enum Contract {
+//   Stmt(Vec<(Vec<Event>, Vec<Op>)>),
+//   Close,
+// }
+
+// #[derive(Debug, PartialEq)]
+// pub struct Op {
+//   f: fn(Option<Box<Expr>>) -> (),
+//   arg: Option<Expr>,
+// }
+
+// #[derive(Debug, PartialEq)]
+// pub enum Event {
+//   Deposit {
+//     from: String,
+//     token: Token,
+//   },
+//   Pay {
+//     to: String,
+//     token: Token,
+//   },
+//   DealProposalCreated,
+//   DealPublished,
+//   DealActivated,
+//   DealTerminated,
+// }
 
 #[derive(Debug, PartialEq)]
 pub enum Expr {
@@ -12,8 +52,19 @@ pub enum Expr {
   Decimal(f64),
   Integer(usize),
   QuotedString(String),
+  Atom(String),
+  Dict(HashMap<String, Expr>),
   Array(Vec<Expr>),
   Pair(Box<Expr>, Box<Expr>),
+  Event{
+    name: String,
+    args: HashMap<String, Expr>
+  },
+  Token{
+    name: String,
+    ticker: String,
+    amount: usize
+  }
 }
 
 parser!{
@@ -22,6 +73,39 @@ parser!{
   {
     expr_()
   }
+}
+
+// fn close<I>() -> impl Parser<I, Output = Contract>
+//   where I: Stream<Token = char>,
+//         I::Error: ParseError<I::Token, I::Range, I::Position>,
+// {
+//   spaces().with(string("close")).map(|_| Contract::Close)
+// }
+
+fn event<I>() -> impl Parser<I, Output = Expr>
+  where I: Stream<Token = char>,
+        I::Error: ParseError<I::Token, I::Range, I::Position>,
+{
+  let ps = choice(
+    (
+      string("Deposit"),
+      string("Pay"),
+      string("DealProposalCreated"),
+      string("DealPublished"),
+      string("DealActivated"),
+      string("DealTerminated"),
+    )
+  );
+
+  (ps, optional(spaces()), dict()).map(|(evt, _, args)|
+      Expr::Event{ name: evt.to_string(), args })
+}
+
+fn atom<I>() -> impl Parser<I, Output = Expr>
+  where I: Stream<Token = char>,
+        I::Error: ParseError<I::Token, I::Range, I::Position>,
+{
+  char(':').with(many1(or(letter(), digit())).map(Expr::Atom))
 }
 
 fn integer<I>() -> impl Parser<I, Output = usize>
@@ -70,15 +154,54 @@ fn decimal<I>() -> impl Parser<I, Output = f64>
     .map(|(integer, decimal)| integer.unwrap_or(0.0) + decimal.unwrap_or(0.0))
 }
 
+fn dict<I>() -> impl Parser<I, Output = HashMap<String, Expr>>
+  where I: Stream<Token = char>,
+        I::Error: ParseError<I::Token, I::Range, I::Position>,
+{
+  let skip_spaces = || spaces().silent();
+  let lex_char = |c| char(c).skip(skip_spaces());
+  let pair =
+    or(word(), quoted_string())
+      .skip(spaces().with(lex_char(':')))
+      .and(spaces().with(expr()))
+      .map(|(key, value): (String, Expr)| (key, value));
+
+  let comma_list =
+    sep_by(pair, lex_char(','));
+
+
+  let dict = between(
+    char('{').skip(spaces()),
+    spaces().with(char('}')),
+    comma_list
+  );
+  dict.map(|pairs: Vec<(String, Expr)>| {
+    let mut dict: HashMap<String, Expr> = HashMap::new();
+    for (key, value) in pairs {
+      dict.insert(key, value);
+    }
+    dict
+  })
+}
+
+fn word<I>() -> impl Parser<I, Output = String>
+  where I: Stream<Token = char>,
+        I::Error: ParseError<I::Token, I::Range, I::Position>,
+{
+  many1(choice((letter(), digit(), char('_')))).map(|chars: String| chars)
+}
+
 fn expr_<'a, I>() -> impl Parser<I, Output = Expr>
   where I: Stream<Token = char>,
         I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
-  let word = many1(letter());
+
   let skip_spaces = || spaces().silent();
   let lex_char = |c| char(c).skip(skip_spaces());
 
-  let comma_list = sep_by(expr(), lex_char(','));
+  let comma_list =
+    sep_by(expr(), lex_char(','));
+
   let array = between(lex_char('['), lex_char(']'), comma_list);
 
   let pair = (lex_char('('),
@@ -91,7 +214,9 @@ fn expr_<'a, I>() -> impl Parser<I, Output = Expr>
   choice((
     attempt(integer().map(Expr::Integer)),
     decimal().map(Expr::Decimal),
-    word.map(Expr::Id),
+    event(),
+    word().map(Expr::Id),
+    dict().map(Expr::Dict),
     quoted_string().map(Expr::QuotedString),
     array.map(Expr::Array),
     pair,
@@ -109,6 +234,96 @@ fn decode(input: &str) -> Result<Expr, String> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn test_word() {
+    let result = word().parse("hello").unwrap().0;
+    assert_eq!(result, "hello".to_string());
+    let result = word().parse("world_tour").unwrap().0;
+    assert_eq!(result, "world_tour".to_string());
+    let result = word().parse("hey12").unwrap().0;
+    assert_eq!(result, "hey12".to_string());
+  }
+
+  #[test]
+  fn test_atom() {
+    let result = atom().parse(":hello").unwrap().0;
+    assert_eq!(result, Expr::Atom("hello".to_string()));
+    let result = atom().parse(":world").unwrap().0;
+    assert_eq!(result, Expr::Atom("world".to_string()));
+    let result = atom().parse(":hey12").unwrap().0;
+    assert_eq!(result, Expr::Atom("hey12".to_string()));
+  }
+
+  #[test]
+  fn test_dict() {
+    let result = dict().parse("{ hello: 123, \"world\" : 50 }").unwrap().0;
+    let mut expected = HashMap::new();
+    expected.insert("hello".to_string(), Expr::Integer(123));
+    expected.insert("world".to_string(), Expr::Integer(50));
+    assert_eq!(result, expected);
+    let result = dict().parse("{hello: 123, world: 50, hey_12: 0.12}").unwrap().0;
+    let mut expected = HashMap::new();
+    expected.insert("hello".to_string(), Expr::Integer(123));
+    expected.insert("world".to_string(), Expr::Integer(50));
+    expected.insert("hey_12".to_string(), Expr::Decimal(0.12));
+    assert_eq!(result, expected);
+  }
+
+  #[test]
+  fn test_multiline_dict() {
+    let e = expr().parse(r#"{
+      hello: 123,
+      "world": 30.
+    }"#).unwrap().0;
+    let mut dict = HashMap::new();
+    dict.insert("hello".to_string(), Expr::Integer(123));
+    dict.insert("world".to_string(), Expr::Decimal(30.0));
+    let expected = Expr::Dict(dict);
+    assert_eq!(e, expected);
+  }
+
+  #[test]
+  fn test_nested_dict() {
+    let e = expr().parse(r#"{
+      hello: 123,
+      "world": 30.,
+      key: {
+        value: 50,
+        "nested": 100
+      }
+    }"#).unwrap().0;
+    let mut nested = HashMap::new();
+    nested.insert("value".to_string(), Expr::Integer(50));
+    nested.insert("nested".to_string(), Expr::Integer(100));
+    let mut dict = HashMap::new();
+    dict.insert("hello".to_string(), Expr::Integer(123));
+    dict.insert("world".to_string(), Expr::Decimal(30.0));
+    dict.insert("key".to_string(), Expr::Dict(nested));
+    let expected = Expr::Dict(dict);
+    assert_eq!(e, expected);
+  }
+
+  #[test]
+  fn test_event() {
+    let e = event().parse(r#"Deposit {
+      from: "addressA",
+      token: {
+        name: "world",
+        ticker: "WRLD",
+        amount: 123
+      }
+    }"#).unwrap().0;
+    let mut args = HashMap::new();
+    args.insert("from".to_string(), Expr::QuotedString("addressA".to_string()));
+    let mut token = HashMap::new();
+    token.insert("name".to_string(), Expr::QuotedString("world".to_string()));
+    token.insert("ticker".to_string(), Expr::QuotedString("WRLD".to_string()));
+    token.insert("amount".to_string(), Expr::Integer(123));
+    args.insert("token".to_string(), Expr::Dict(token));
+    let expected = Expr::Event{ name: "Deposit".to_string(), args };
+    assert_eq!(e, expected);
+  }
 
   #[test]
   fn test_integer() {
@@ -192,6 +407,17 @@ mod tests {
     assert_eq!(e, Expr::Id("foo".to_string()));
     let e = expr().parse("\"hello\"").unwrap().0;
     assert_eq!(e, Expr::QuotedString("hello".to_string()));
+    let e = expr().parse(r#"{
+      hello: 123,
+      "world": 50.,
+      key: "value"
+    }"#).unwrap().0;
+    let mut dict = HashMap::new();
+    dict.insert("hello".to_string(), Expr::Integer(123));
+    dict.insert("world".to_string(), Expr::Decimal(50.0));
+    dict.insert("key".to_string(), Expr::QuotedString("value".to_string()));
+    let expected = Expr::Dict(dict);
+    assert_eq!(e, expected);
   }
 
   #[test]

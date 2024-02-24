@@ -1,65 +1,23 @@
 mod expr;
 
-use combine::parser::char::{spaces, digit, char, letter};
-use combine::parser::choice::or;
-use combine::parser::range::take_while1;
-use combine::{many1, between, sep_by, any, choice, Parser, EasyParser};
-use combine::stream::easy;
+use fvm_sdk::initialize;
+use fvm_sdk::actor::create_actor;
+use cid::Cid;
+use cid::multihash::Multihash;
+use rand::{Rng, thread_rng};
 
-/*
-fn parse_str_list(input: &str) -> Result<Vec<&str>, easy::ParseError<&str>> {
-    let tool = take_while1(|c: char| c.is_alphabetic());
-
-    let mut tools = sep_by(tool, range(", "));
-
-    let output = tools.easy_parse(input);
-    output
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_str_list() {
-        let input = "hello, world, hey12";
-        let result = parse_str_list(input);
-        assert_eq!(result, Ok(vec!["hello", "world", "hey12"]));
-    }
-}
-*/
+// const Sha3_256: u64 = 0x16;
 
 fn main() {
-    let integer = spaces()
-        .with(many1(digit()).map(|string: String| string.parse::<i32>().unwrap()));
-
-    // let string = spaces()
-    //     .with(between(char('"'), char('"'), many1(or(letter(), digit()))));
-
-    let mut integer_list = sep_by(
-        integer,
-        spaces().skip(char(','))
-    );
-
-    // let mut string_list = sep_by(
-    //     string,
-    //     spaces().skip(char(',')),
-    // );
-
-    let input = "1234, 45,78";
-    let result: Result<(Vec<i32>, &str), easy::ParseError<&str>> =
-        integer_list.easy_parse(input);
-
-    // let input: &str = "\"hello\", \"world\", \"hey12\"";
-    // let result: Result<(Vec<String>, &str), easy::ParseError<&str>> =
-    //     string_list.easy_parse(input);
-
-
-    // let result: Result<(Vec<i32>, &str), easy::ParseError<&str>> =
-    //     string_list.easy_parse(input);
-
-    match result {
-        Ok((value, _remaining_input)) => println!("{:?}", value),
-        Err(err) => println!("{}", err),
-    }
+    // let digest_bytes = [
+    //     0x16, 0x20, 0x64, 0x4b, 0xcc, 0x7e, 0x56, 0x43, 0x73, 0x04, 0x09, 0x99, 0xaa, 0xc8, 0x9e,
+    //     0x76, 0x22, 0xf3, 0xca, 0x71, 0xfb, 0xa1, 0xd9, 0x72, 0xfd, 0x94, 0xa3, 0x1c, 0x3b, 0xfb,
+    //     0xf2, 0x4e, 0x39, 0x38,
+    // ];
+    // initialize();
+    // let mh = Multihash::<64>::from_bytes(&digest_bytes).unwrap();
+    // // let cid = cid::Cid::new_v0(mh).unwrap() as Cid;
+    // let cid = Cid::default();
+    // let n = thread_rng().gen();
+    // create_actor(n, cid, None).unwrap();
 }

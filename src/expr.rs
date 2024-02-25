@@ -1,19 +1,14 @@
 use std::collections::HashMap;
-use core::ops::Fn;
-use std::hash::Hash;
-
-use combine::one_of;
 use combine::parser;
 use combine::attempt;
-
 use combine::parser::char::string;
 use combine::parser::choice::or;
-use combine::token;
 use combine::{not_followed_by, optional};
 use combine::parser::char::{spaces, newline, digit, char, letter};
 use combine::{between, choice, many1, sep_by, ParseError, Parser};
 use combine::stream::Stream;
-// use fvm_sdk::event;
+
+use crate::op::*;
 
 // #[derive(Debug, PartialEq)]
 // pub struct Token(String, String, usize);
@@ -52,6 +47,14 @@ pub struct EventOp {
   event: Expr,
 }
 
+pub type Ops = Vec<Op>;
+
+#[derive(Debug, PartialEq)]
+pub struct Op {
+  f: fn(Option<Expr>) -> (),
+  arg: Option<Expr>,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Expr {
   Id(String),
@@ -87,6 +90,28 @@ parser!{
 // {
 //   spaces().with(string("close")).map(|_| Contract::Close)
 // }
+
+fn op<T>() -> impl Parser<T, Output = Op>
+  where T: Stream<Token = char>,
+        T::Error: ParseError<T::Token, T::Range, T::Position>,
+{
+  let kw = choice(
+    (
+      string("pay"),
+    )
+  );
+
+  (kw, optional(spaces()), dict()).map(|(_op, _, args)|
+      Op{ f: pay, arg: Some(Expr::Dict(args)) })
+  // spaces()
+  //   .with(string("pay"))
+  //   .and(spaces().with(expr()))
+  //   .map(|(_op_name, expr)| Op{
+  //       f: pay,
+  //       arg: Some(expr),
+  //     }
+  //   )
+}
 
 fn when<T>() -> impl Parser<T, Output = EventOp>
   where T: Stream<Token = char>,
@@ -252,7 +277,10 @@ fn decode(input: &str) -> Result<Expr, String> {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use std::hash::Hash;
+
+use super::*;
+  use crate::op::pay;
 
   #[test]
   fn test_word() {
@@ -321,6 +349,28 @@ mod tests {
     dict.insert("key".to_string(), Expr::Dict(nested));
     let expected = Expr::Dict(dict);
     assert_eq!(e, expected);
+  }
+
+  #[test]
+  fn test_op() {
+    let e = op().parse(r#"pay {
+      to: "addressA",
+      token: {
+        name: "world",
+        ticker: "WRLD",
+        amount: 123
+      }
+    }"#).unwrap().0;
+    let mut inner = HashMap::new();
+    inner.insert("to".to_string(), Expr::QuotedString("addressA".to_string()));
+    let mut inner_token = HashMap::new();
+    inner_token.insert("name".to_string(), Expr::QuotedString("world".to_string()));
+    inner_token.insert("ticker".to_string(), Expr::QuotedString("WRLD".to_string()));
+    inner_token.insert("amount".to_string(), Expr::Integer(123));
+    inner.insert("token".to_string(), Expr::Dict(inner_token));
+
+    let arg = Expr::Dict(inner);
+    assert_eq!(e, Op{ f: pay, arg: Some(arg) });
   }
 
   #[test]

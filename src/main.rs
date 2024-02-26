@@ -3,6 +3,8 @@ mod op;
 
 use fvm_sdk::initialize;
 use fvm_sdk::actor::create_actor;
+use fvm_sdk::event::emit_event;
+use fvm_shared::event::ActorEvent;
 use cid::Cid;
 use cid::multihash::Multihash;
 use rand::{Rng, thread_rng};

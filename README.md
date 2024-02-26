@@ -30,6 +30,20 @@ when Deposit {
         amount: 10
       }
     }
+
+    propose {
+      deal_request: {
+        piece_cid: "Qmx",
+        piece_size: 123,
+        verified_deal: true,
+        label: "label",
+        start_epoch: 123,
+        end_epoch: 123,
+        storage_price_per_epoch: 123,
+        provider_collateral: 123,
+        extra_params_version: 123
+      }
+    }
   }
 
 ```

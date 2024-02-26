@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::str::Bytes;
 use combine::many;
 use combine::parser;
 use combine::attempt;
@@ -64,6 +65,7 @@ pub enum Expr {
   Decimal(f64),
   Integer(usize),
   QuotedString(String),
+  Bool(bool),
   Atom(String),
   Dict(HashMap<String, Expr>),
   Array(Vec<Expr>),
@@ -76,6 +78,17 @@ pub enum Expr {
     name: String,
     ticker: String,
     amount: usize
+  },
+  DealRequest {
+    piece_cid: String,
+    piece_size: u64,
+    verified_deal: bool,
+    label: String,
+    start_epoch: i64,
+    end_epoch: i64,
+    storage_price_per_epoch: usize,
+    provider_collateral: usize,
+    extra_params_version: u64,
   }
 }
 
@@ -111,22 +124,19 @@ fn op<T>() -> impl Parser<T, Output = Op>
   where T: Stream<Token = char>,
         T::Error: ParseError<T::Token, T::Range, T::Position>,
 {
-  let kw = choice(
-    (
-      string("pay"),
-    )
-  );
+  let kw = choice((
+    attempt(string("pay")),
+    attempt(string("propose")),
+  ));
 
-  (kw, optional(spaces()), dict()).map(|(_op, _, args)|
-      Op{ f: pay, arg: Some(Expr::Dict(args)) })
-  // spaces()
-  //   .with(string("pay"))
-  //   .and(spaces().with(expr()))
-  //   .map(|(_op_name, expr)| Op{
-  //       f: pay,
-  //       arg: Some(expr),
-  //     }
-  //   )
+  (kw, optional(spaces()), dict())
+    .map(|(op, _, args)| {
+      match op {
+        "pay" => Op{ f: pay, arg: Some(Expr::Dict(args)) },
+        "propose" => Op{ f: propose, arg: Some(Expr::Dict(args)) },
+        _ => todo!("Don't know what to do"),
+      }
+    })
 }
 
 fn when<T>() -> impl Parser<T, Output = EventOp>
@@ -244,6 +254,16 @@ fn dict<I>() -> impl Parser<I, Output = HashMap<String, Expr>>
   })
 }
 
+fn boolean<I>() -> impl Parser<I, Output = bool>
+  where I: Stream<Token = char>,
+        I::Error: ParseError<I::Token, I::Range, I::Position>,
+{
+  choice((
+    string("true").map(|_| true),
+    string("false").map(|_| false),
+  ))
+}
+
 fn word<I>() -> impl Parser<I, Output = String>
   where I: Stream<Token = char>,
         I::Error: ParseError<I::Token, I::Range, I::Position>,
@@ -275,6 +295,7 @@ fn expr_<'a, I>() -> impl Parser<I, Output = Expr>
     attempt(integer().map(Expr::Integer)),
     decimal().map(Expr::Decimal),
     event(),
+    attempt(boolean().map(Expr::Bool)),
     word().map(Expr::Id),
     dict().map(Expr::Dict),
     quoted_string().map(Expr::QuotedString),
@@ -317,13 +338,26 @@ use super::*;
     let result = atom().parse(":hey12").unwrap().0;
     assert_eq!(result, Expr::Atom("hey12".to_string()));
   }
+  #[test]
+  fn test_boolean() {
+    let result = boolean().parse("true").unwrap().0;
+    assert_eq!(result, true);
+    let result = boolean().parse("false").unwrap().0;
+    assert_eq!(result, false);
+    if let Err(_) = boolean().parse("no") {
+      assert!(true);
+    } else {
+      assert!(false);
+    }
+  }
 
   #[test]
   fn test_dict() {
-    let result = dict().parse("{ hello: 123, \"world\" : 50 }").unwrap().0;
+    let result = dict().parse("{ hello: 123, \"world\" : 50, verified: true }").unwrap().0;
     let mut expected = HashMap::new();
     expected.insert("hello".to_string(), Expr::Integer(123));
     expected.insert("world".to_string(), Expr::Integer(50));
+    expected.insert("verified".to_string(), Expr::Bool(true));
     assert_eq!(result, expected);
     let result = dict().parse("{hello: 123, world: 50, hey_12: 0.12}").unwrap().0;
     let mut expected = HashMap::new();
@@ -353,10 +387,15 @@ use super::*;
       "world": 30.,
       key: {
         value: 50,
-        "nested": 100
+        "nested": 100,
+        ozone: 30,
+        people: false
+
       }
     }"#).unwrap().0;
     let mut nested = HashMap::new();
+    nested.insert("ozone".to_string(), Expr::Integer(30));
+    nested.insert("people".to_string(), Expr::Bool(false));
     nested.insert("value".to_string(), Expr::Integer(50));
     nested.insert("nested".to_string(), Expr::Integer(100));
     let mut dict = HashMap::new();
@@ -364,11 +403,42 @@ use super::*;
     dict.insert("world".to_string(), Expr::Decimal(30.0));
     dict.insert("key".to_string(), Expr::Dict(nested));
     let expected = Expr::Dict(dict);
+
+    assert_eq!(e, expected);
+
+    let e = expr().parse(r#"{
+      deal_request: {
+        piece_cid: "QmX",
+        piece_size: 123,
+        verified_deal: true,
+        label: "label",
+        start_epoch: 123,
+        end_epoch: 123,
+        storage_price_per_epoch: 123,
+        provider_collateral: 123,
+        extra_params_version: 123
+      }
+    }"#).unwrap().0;
+
+    let mut nested = HashMap::new();
+    nested.insert("piece_cid".to_string(), Expr::QuotedString("QmX".to_string()));
+    nested.insert("piece_size".to_string(), Expr::Integer(123));
+    nested.insert("verified_deal".to_string(), Expr::Bool(true));
+    nested.insert("label".to_string(), Expr::QuotedString("label".to_string()));
+    nested.insert("start_epoch".to_string(), Expr::Integer(123));
+    nested.insert("end_epoch".to_string(), Expr::Integer(123));
+    nested.insert("storage_price_per_epoch".to_string(), Expr::Integer(123));
+    nested.insert("provider_collateral".to_string(), Expr::Integer(123));
+    nested.insert("extra_params_version".to_string(), Expr::Integer(123));
+
+    let mut dict = HashMap::new();
+    dict.insert("deal_request".to_string(), Expr::Dict(nested));
+    let expected = Expr::Dict(dict);
     assert_eq!(e, expected);
   }
 
   #[test]
-  fn test_op() {
+  fn test_pay_op() {
     let e = op().parse(r#"pay {
       to: "addressA",
       token: {
@@ -387,6 +457,40 @@ use super::*;
 
     let arg = Expr::Dict(inner);
     assert_eq!(e, Op{ f: pay, arg: Some(arg) });
+  }
+
+  #[test]
+  fn test_propose_op() {
+    let e = op().parse(r#"propose {
+      deal_request: {
+        piece_cid: "QmX",
+        piece_size: 123,
+        verified_deal: true,
+        label: "label",
+        start_epoch: 123,
+        end_epoch: 123,
+        storage_price_per_epoch: 123,
+        provider_collateral: 123,
+        extra_params_version: 123
+      }
+    }"#).unwrap().0;
+
+    let mut deal_request = HashMap::new();
+    deal_request.insert("piece_cid".to_string(), Expr::QuotedString("QmX".to_string()));
+    deal_request.insert("piece_size".to_string(), Expr::Integer(123));
+    deal_request.insert("verified_deal".to_string(), Expr::Bool(true));
+    deal_request.insert("label".to_string(), Expr::QuotedString("label".to_string()));
+    deal_request.insert("start_epoch".to_string(), Expr::Integer(123));
+    deal_request.insert("end_epoch".to_string(), Expr::Integer(123));
+    deal_request.insert("storage_price_per_epoch".to_string(), Expr::Integer(123));
+    deal_request.insert("provider_collateral".to_string(), Expr::Integer(123));
+    deal_request.insert("extra_params_version".to_string(), Expr::Integer(123));
+
+    let mut inner = HashMap::new();
+    inner.insert("deal_request".to_string(), Expr::Dict(deal_request));
+
+    let arg = Expr::Dict(inner);
+    assert_eq!(e, Op{ f: propose, arg: Some(arg) });
   }
 
   #[test]
@@ -439,6 +543,20 @@ use super::*;
           amount: 20
         }
       }
+
+      propose {
+        deal_request: {
+          piece_cid: "Qmx",
+          piece_size: 123,
+          verified_deal: true,
+          label: "label",
+          start_epoch: 123,
+          end_epoch: 123,
+          storage_price_per_epoch: 123,
+          provider_collateral: 123,
+          extra_params_version: 123
+        }
+      }
     "#).unwrap().0;
 
     let mut args = HashMap::new();
@@ -474,7 +592,22 @@ use super::*;
 
     let op2 = Op{ f: pay, arg: Some(Expr::Dict(pargs)) };
 
-    let expected = (event_op, vec![op1, op2]);
+    let mut pargs = HashMap::new();
+    let mut deal_request = HashMap::new();
+    deal_request.insert("piece_cid".to_string(), Expr::QuotedString("Qmx".to_string()));
+    deal_request.insert("piece_size".to_string(), Expr::Integer(123));
+    deal_request.insert("verified_deal".to_string(), Expr::Bool(true));
+    deal_request.insert("label".to_string(), Expr::QuotedString("label".to_string()));
+    deal_request.insert("start_epoch".to_string(), Expr::Integer(123));
+    deal_request.insert("end_epoch".to_string(), Expr::Integer(123));
+    deal_request.insert("storage_price_per_epoch".to_string(), Expr::Integer(123));
+    deal_request.insert("provider_collateral".to_string(), Expr::Integer(123));
+    deal_request.insert("extra_params_version".to_string(), Expr::Integer(123));
+    pargs.insert("deal_request".to_string(), Expr::Dict(deal_request));
+
+    let op3 = Op{ f: propose, arg: Some(Expr::Dict(pargs)) };
+
+    let expected = (event_op, vec![op1, op2, op3]);
     assert_eq!(e, expected);
   }
 

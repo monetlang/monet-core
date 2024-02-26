@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use combine::many;
 use combine::parser;
 use combine::attempt;
 use combine::parser::char::string;
@@ -40,6 +41,8 @@ use crate::op::*;
 //   DealActivated,
 //   DealTerminated,
 // }
+
+pub type Stmt = (EventOp, Ops);
 
 #[derive(Debug, PartialEq)]
 pub struct EventOp {
@@ -90,6 +93,19 @@ parser!{
 // {
 //   spaces().with(string("close")).map(|_| Contract::Close)
 // }
+
+fn stmt<T>() -> impl Parser<T, Output = Stmt>
+  where T: Stream<Token = char>,
+        T::Error: ParseError<T::Token, T::Range, T::Position>,
+{
+  (
+    when(),
+    spaces(),
+    optional(string("then")),
+    spaces(),
+    many(op().skip(spaces())),
+  ).map(|(event, _, _, _, ops)| (event, ops))
+}
 
 fn op<T>() -> impl Parser<T, Output = Op>
   where T: Stream<Token = char>,
@@ -393,6 +409,73 @@ use super::*;
     let event = Expr::Event{ name: "Deposit".to_string(), args };
     let event_op = EventOp{ name: "when".to_string(), event };
     assert_eq!(e, event_op);
+  }
+
+  #[test]
+  fn test_stmt() {
+    let e = stmt().parse(r#"when Deposit {
+      from: "addressA",
+      token: {
+        name: "world",
+        ticker: "WRLD",
+        amount: 123
+      }
+    } then
+
+      pay {
+        to: "addressB",
+        token: {
+          name: "mars",
+          ticker: "MARS",
+          amount: 100
+        }
+      }
+
+      pay {
+        to: "addressC",
+        token: {
+          name: "jupiter",
+          ticker: "JUP",
+          amount: 20
+        }
+      }
+    "#).unwrap().0;
+
+    let mut args = HashMap::new();
+    args.insert("from".to_string(), Expr::QuotedString("addressA".to_string()));
+    let mut token = HashMap::new();
+    token.insert("name".to_string(), Expr::QuotedString("world".to_string()));
+    token.insert("ticker".to_string(), Expr::QuotedString("WRLD".to_string()));
+    token.insert("amount".to_string(), Expr::Integer(123));
+    args.insert("token".to_string(), Expr::Dict(token));
+
+    let event = Expr::Event{ name: "Deposit".to_string(), args };
+    let event_op = EventOp{ name: "when".to_string(), event };
+
+    let mut pargs = HashMap::new();
+    pargs.insert("to".to_string(), Expr::QuotedString("addressB".to_string()));
+    let mut token = HashMap::new();
+    token.insert("name".to_string(), Expr::QuotedString("mars".to_string()));
+    token.insert("ticker".to_string(), Expr::QuotedString("MARS".to_string()));
+    token.insert("amount".to_string(), Expr::Integer(100));
+
+    pargs.insert("token".to_string(), Expr::Dict(token));
+
+    let op1 = Op{ f: pay, arg: Some(Expr::Dict(pargs)) };
+
+    let mut pargs = HashMap::new();
+    pargs.insert("to".to_string(), Expr::QuotedString("addressC".to_string()));
+    let mut token = HashMap::new();
+    token.insert("name".to_string(), Expr::QuotedString("jupiter".to_string()));
+    token.insert("ticker".to_string(), Expr::QuotedString("JUP".to_string()));
+    token.insert("amount".to_string(), Expr::Integer(20));
+
+    pargs.insert("token".to_string(), Expr::Dict(token));
+
+    let op2 = Op{ f: pay, arg: Some(Expr::Dict(pargs)) };
+
+    let expected = (event_op, vec![op1, op2]);
+    assert_eq!(e, expected);
   }
 
   #[test]

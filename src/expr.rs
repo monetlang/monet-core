@@ -106,18 +106,23 @@ parser!{
 // {
 //   spaces().with(string("close")).map(|_| Contract::Close)
 // }
+fn ops<I>() -> impl Parser<I, Output = Ops>
+  where I: Stream<Token = char>,
+        I::Error: ParseError<I::Token, I::Range, I::Position>,
+{
+  many(((
+    spaces(),
+    optional(string("then")),
+    spaces(),
+    op(),
+  )).map(|(_, _, _, op)| op))
+}
 
 fn stmt<T>() -> impl Parser<T, Output = Stmt>
   where T: Stream<Token = char>,
         T::Error: ParseError<T::Token, T::Range, T::Position>,
 {
-  (
-    when(),
-    spaces(),
-    optional(string("then")),
-    spaces(),
-    many(op().skip(spaces())),
-  ).map(|(event, _, _, _, ops)| (event, ops))
+  (attempt(when()), ops())
 }
 
 fn op<T>() -> impl Parser<T, Output = Op>
@@ -143,13 +148,11 @@ fn when<T>() -> impl Parser<T, Output = EventOp>
   where T: Stream<Token = char>,
         T::Error: ParseError<T::Token, T::Range, T::Position>,
 {
-  spaces()
-    .with(string("when"))
-    .and(spaces().with(event()))
-    .map(|(name, event)| EventOp{
-      name: name.to_string(),
-      event,
-    })
+  (
+    string("when"),
+    spaces(),
+    event(),
+  ).map(|(name, _, event)| EventOp{ name: name.to_string(), event })
 }
 
 fn event<I>() -> impl Parser<I, Output = Expr>
@@ -494,6 +497,67 @@ use super::*;
   }
 
   #[test]
+  fn test_ops() {
+    let e = ops().parse(r#"pay {
+      to: "addressA",
+      token: {
+        name: "world",
+        ticker: "WRLD",
+        amount: 123
+      }
+    } then
+    pay {
+      to: "addressB",
+      token: {
+        name: "mars",
+        ticker: "MARS",
+        amount: 100
+      }
+    }
+    pay {
+      to: "addressC",
+      token: {
+        name: "jupiter",
+        ticker: "JUP",
+        amount: 20
+      }
+    }"#).unwrap().0;
+    let mut inner = HashMap::new();
+    inner.insert("to".to_string(), Expr::QuotedString("addressA".to_string()));
+    let mut inner_token = HashMap::new();
+    inner_token.insert("name".to_string(), Expr::QuotedString("world".to_string()));
+    inner_token.insert("ticker".to_string(), Expr::QuotedString("WRLD".to_string()));
+    inner_token.insert("amount".to_string(), Expr::Integer(123));
+    inner.insert("token".to_string(), Expr::Dict(inner_token));
+
+    // let arg = Expr::Dict(inner);
+    let op1 = Op{ f: pay, arg: Some(Expr::Dict(inner)) };
+
+    let mut inner = HashMap::new();
+    inner.insert("to".to_string(), Expr::QuotedString("addressB".to_string()));
+    let mut inner_token = HashMap::new();
+    inner_token.insert("name".to_string(), Expr::QuotedString("mars".to_string()));
+    inner_token.insert("ticker".to_string(), Expr::QuotedString("MARS".to_string()));
+    inner_token.insert("amount".to_string(), Expr::Integer(100));
+    inner.insert("token".to_string(), Expr::Dict(inner_token));
+
+    let op2 = Op{ f: pay, arg: Some(Expr::Dict(inner)) };
+
+    let mut inner = HashMap::new();
+    inner.insert("to".to_string(), Expr::QuotedString("addressC".to_string()));
+    let mut inner_token = HashMap::new();
+    inner_token.insert("name".to_string(), Expr::QuotedString("jupiter".to_string()));
+    inner_token.insert("ticker".to_string(), Expr::QuotedString("JUP".to_string()));
+    inner_token.insert("amount".to_string(), Expr::Integer(20));
+    inner.insert("token".to_string(), Expr::Dict(inner_token));
+
+    let op3 = Op{ f: pay, arg: Some(Expr::Dict(inner)) };
+
+    assert_eq!(e, vec![op1, op2, op3]);
+  }
+
+
+  #[test]
   fn test_when() {
     let e = when().parse(r#"when Deposit {
       from: "addressA",
@@ -525,7 +589,6 @@ use super::*;
         amount: 123
       }
     } then
-
       pay {
         to: "addressB",
         token: {
@@ -533,8 +596,7 @@ use super::*;
           ticker: "MARS",
           amount: 100
         }
-      }
-
+      } then
       pay {
         to: "addressC",
         token: {
@@ -542,8 +604,7 @@ use super::*;
           ticker: "JUP",
           amount: 20
         }
-      }
-
+      } then
       propose {
         deal_request: {
           piece_cid: "Qmx",
@@ -556,8 +617,7 @@ use super::*;
           provider_collateral: 123,
           extra_params_version: 123
         }
-      }
-    "#).unwrap().0;
+      }"#).unwrap().0;
 
     let mut args = HashMap::new();
     args.insert("from".to_string(), Expr::QuotedString("addressA".to_string()));

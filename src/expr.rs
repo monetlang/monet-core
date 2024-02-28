@@ -356,11 +356,22 @@ use super::*;
 
   #[test]
   fn test_dict() {
-    let result = dict().parse("{ hello: 123, \"world\" : 50, verified: true }").unwrap().0;
+    let result = dict().parse(r#"{ 
+      hello: 123,
+      "world" : 50,
+      verified: true,
+      fruits: ["apple", "orange", "banana"]
+    }"#).unwrap().0;
     let mut expected = HashMap::new();
     expected.insert("hello".to_string(), Expr::Integer(123));
     expected.insert("world".to_string(), Expr::Integer(50));
     expected.insert("verified".to_string(), Expr::Bool(true));
+    expected.insert("fruits".to_string(), Expr::Array(vec![
+      Expr::QuotedString("apple".to_string()),
+      Expr::QuotedString("orange".to_string()),
+      Expr::QuotedString("banana".to_string()),
+    
+    ]));
     assert_eq!(result, expected);
     let result = dict().parse("{hello: 123, world: 50, hey_12: 0.12}").unwrap().0;
     let mut expected = HashMap::new();

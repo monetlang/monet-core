@@ -27,8 +27,8 @@ impl Function {
 pub(crate) enum Expr {
   Number(f64),
   Variable(String),
-  BinaryOp {
-    op: Box<Expr>,
+  BinOp {
+    op: char,
     lhs: Box<Expr>,
     rhs: Box<Expr>,
   },

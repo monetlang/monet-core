@@ -84,6 +84,7 @@ fn expr_<'a, I>() -> impl Parser<I, Output = Expr>
   where I: Stream<Token = char>,
         I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
+
   let skip_spaces = || spaces().silent();
 
   choice((
@@ -115,11 +116,34 @@ where
     I: Stream<Token = char>,
     I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
-  choice((
-    parse_number_expr(),
-    parse_paren_expr(),
-    parse_identifier_expr(),
-  ))
+  spaces()
+    .with(
+      choice((
+        parse_number_expr(),
+        parse_paren_expr(),
+        parse_identifier_expr(),
+      ))
+    ).skip(spaces())
+}
+
+fn create_binop_node(c: char) -> impl Fn(Expr, Expr) -> Expr {
+  move |l: Expr, r: Expr| Expr::BinOp {
+      op: c,
+      lhs: Box::new(l),
+      rhs: Box::new(r),
+  }
+}
+
+macro_rules! create_binop {
+  ($c:expr) => {
+    return create_binop_node($c)
+  }
+}
+
+macro_rules! space_op {
+  ($op:expr) => {
+    between(spaces().silent(), spaces().silent(), token($op))
+  }
 }
 
 fn expression_parser<I>() -> impl Parser<I, Output = Expr>
@@ -127,79 +151,27 @@ where
     I: Stream<Token = char>,
     I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
-    // let number = many1(digit()).map(|s: String| s.parse::<i64>().unwrap());
-    // let factor = choice((
-    //     between(char('('), char(')'), move || expression_parser()),
-    //     number,
-    // ));
-
-    // let factor = choice(
-    //   (
-    //     attempt(parse_number_expr()),
-    //     parse_paren_expr(),
-    //   ));
     let number_expr = parse_number_expr();
     let paren_expr = between(char('('), char(')'), expr_parser());
-    let factor = choice((number_expr, paren_expr));
+    let factor = spaces()
+      .with(choice((paren_expr, number_expr)))
+      .skip(spaces());
 
+    let div = token::<I>('/').map(|c| create_binop!(c));
+    let mul = token::<I>('*').map(|c| create_binop!(c));
 
-    let div = token::<I>('/')
-      .map(|_| |l: Expr, r: Expr| Expr::BinOp{
-        op: '/',
-        lhs: Box::new(l),
-        rhs: Box::new(r)
-      });
+    let op1 = choice((attempt(div), mul));
 
-    let mul = token::<I>('*')
-      .map(|_| |l: Expr, r: Expr| Expr::BinOp{
-        op: '*',
-        lhs: Box::new(l),
-        rhs: Box::new(r)
-      });
+    let term = chainl1(factor, op1);
 
-    // let p = choice((div, mul));
+    let add = token::<I>('+').map(|c| create_binop!(c));
+    let sub = token::<I>('-').map(|c| create_binop!(c));
 
-    // let term1 = chainl1(factor,div);
+    let op2 = choice((attempt(sub), add));
 
-    // let term2 = chainl1(term1, mul);
-
-    let add = token::<I>('+')
-      .map(|_| |l: Expr, r: Expr| Expr::BinOp{
-        op: '+',
-        lhs: Box::new(l),
-        rhs: Box::new(r)
-      });
-
-    let sub = between(
-      optional(spaces()),
-      optional(spaces()),
-      token::<I>('-')
-    )
-      .map(|_| |l: Expr, r: Expr| Expr::BinOp{
-        op: '-',
-        lhs: Box::new(l),
-        rhs: Box::new(r)
-      });
-
-    let expr = chainl1(
-      factor,
-      sub,
-    );
-
-    // let expr2 = chainl1(
-    //   expr1,
-    //   sub,
-    // );
-
-    // let expr = chainl1(
-    //     term,
-    //     choice((
-    //         char('+').map(|_| |l: i64, r: i64| l + r),
-    //         char('-').map(|_| |l: i64, r: i64| l - r),
-    //     )),
-    // );
-
-    spaces().with(expr)
+    let expr = chainl1(term, op2);
+    // spaces().with(expr).skip(spaces())
+    expr
 }
 
 
@@ -210,27 +182,33 @@ mod tests {
 
   #[test]
   fn test_expression_parser() {
-    let result = expression_parser().parse("3.0 - 4.0 - 5.0").unwrap().0;
+    let result = expression_parser().parse("3.0 + 4.0 - 5.0").unwrap().0;
     assert_eq!(result, Expr::BinOp {
       op: '-',
       lhs: Box::new(Expr::BinOp {
-        op: '-',
+        op: '+',
         lhs: Box::new(Expr::Number(3.0)),
         rhs: Box::new(Expr::Number(4.0)),
       }),
       rhs: Box::new(Expr::Number(5.0)),
     });
 
-    let result = expression_parser().parse("3.0 - (4.0 - 5.0)").unwrap().0;
+    let result = expression_parser().parse("3.0 * (4.0 + 5.0)").unwrap().0;
     assert_eq!(result, Expr::BinOp {
-      op: '-',
+      op: '*',
       lhs: Box::new(Expr::Number(3.0)),
       rhs: Box::new(Expr::BinOp {
-        op: '-',
+        op: '+',
         lhs: Box::new(Expr::Number(4.0)),
         rhs: Box::new(Expr::Number(5.0)),
       }),
     });
+  }
+
+  #[test]
+  fn test_parse_primary() {
+    let result = parse_primary().parse(" 3.14  ").unwrap().0;
+    assert_eq!(result, Expr::Number(3.14));
   }
 
   #[test]

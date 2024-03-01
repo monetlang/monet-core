@@ -1,12 +1,11 @@
 use std::collections::HashMap;
-use std::str::Bytes;
 use combine::many;
 use combine::parser;
 use combine::attempt;
 use combine::parser::char::string;
 use combine::parser::choice::or;
 use combine::{not_followed_by, optional};
-use combine::parser::char::{spaces, newline, digit, char, letter};
+use combine::parser::char::{spaces, digit, char, letter};
 use combine::{between, choice, many1, sep_by, ParseError, Parser};
 use combine::stream::Stream;
 

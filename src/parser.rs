@@ -140,12 +140,6 @@ macro_rules! create_binop {
   }
 }
 
-macro_rules! space_op {
-  ($op:expr) => {
-    between(spaces().silent(), spaces().silent(), token($op))
-  }
-}
-
 fn expression_parser<I>() -> impl Parser<I, Output = Expr>
 where
     I: Stream<Token = char>,
@@ -160,16 +154,17 @@ where
     let div = token::<I>('/').map(|c| create_binop!(c));
     let mul = token::<I>('*').map(|c| create_binop!(c));
 
-    let op1 = choice((attempt(div), mul));
+    // let op1 = div.or(mul);
 
-    let term = chainl1(factor, op1);
+    let term = chainl1(chainl1(factor, div), mul);
+    // let term = chainl1(factor, op1);
 
-    let add = token::<I>('+').map(|c| create_binop!(c));
     let sub = token::<I>('-').map(|c| create_binop!(c));
+    let add = token::<I>('+').map(|c| create_binop!(c));
 
-    let op2 = choice((attempt(sub), add));
+    // let op2 = choice((sub, add));
 
-    let expr = chainl1(term, op2);
+    let expr = chainl1(chainl1(term, sub), add);
     // spaces().with(expr).skip(spaces())
     expr
 }
@@ -181,28 +176,83 @@ mod tests {
   use super::*;
 
   #[test]
-  fn test_expression_parser() {
-    let result = expression_parser().parse("3.0 + 4.0 - 5.0").unwrap().0;
-    assert_eq!(result, Expr::BinOp {
-      op: '-',
-      lhs: Box::new(Expr::BinOp {
-        op: '+',
-        lhs: Box::new(Expr::Number(3.0)),
-        rhs: Box::new(Expr::Number(4.0)),
-      }),
-      rhs: Box::new(Expr::Number(5.0)),
-    });
+  fn test_sub_and_add_op_precedence() {
+    use Expr::{Number, BinOp};
 
-    let result = expression_parser().parse("3.0 * (4.0 + 5.0)").unwrap().0;
-    assert_eq!(result, Expr::BinOp {
-      op: '*',
-      lhs: Box::new(Expr::Number(3.0)),
-      rhs: Box::new(Expr::BinOp {
-        op: '+',
-        lhs: Box::new(Expr::Number(4.0)),
-        rhs: Box::new(Expr::Number(5.0)),
+    let result = expression_parser().parse("3.0 + 4.0 - 2.0").unwrap().0;
+    let expected = BinOp {
+      op: '+',
+      lhs: Box::new(Number(3.0)),
+      rhs: Box::new(BinOp {
+        op: '-',
+        lhs: Box::new(Number(4.0)),
+        rhs: Box::new(Number(2.0)),
       }),
-    });
+    };
+
+    assert_eq!(result, expected);
+  }
+
+  #[test]
+  fn test_div_and_mul_op_precedence() {
+
+    use Expr::{Number, BinOp};
+
+    let result = expression_parser().parse("3.0 * 4.0 / 2.0").unwrap().0;
+    let expected = BinOp {
+      op: '*',
+      lhs: Box::new(Number(3.0)),
+      rhs: Box::new(BinOp {
+        op: '/',
+        lhs: Box::new(Number(4.0)),
+        rhs: Box::new(Number(2.0)),
+      }),
+
+    };
+
+    assert_eq!(result, expected);
+  }
+
+  #[test]
+  fn test_all_op_precedence() {
+    use Expr::{Number, BinOp};
+
+    let result = expression_parser().parse("3.0 + 4.0 * 2.0 / 2.0 - 1.0").unwrap().0;
+    let expected = BinOp {
+      op: '+',
+      lhs: Box::new(Number(3.0)),
+      rhs: Box::new(BinOp {
+        op: '-',
+        lhs: Box::new(BinOp {
+          op: '*',
+          lhs: Box::new(Number(4.0)),
+          rhs: Box::new(BinOp {
+            op: '/',
+            lhs: Box::new(Number(2.0)),
+            rhs: Box::new(Number(2.0)),
+          }),
+        }),
+        rhs: Box::new(Number(1.0)),
+      })
+    };
+    assert_eq!(result, expected);
+  }
+
+  #[test]
+  fn test_op_with_paren() {
+    use Expr::{Number, BinOp};
+
+    let result = expression_parser().parse("(3.0 + 4.0) * 2.0").unwrap().0;
+    let expected = BinOp {
+      op: '*',
+      lhs: Box::new(BinOp {
+        op: '+',
+        lhs: Box::new(Number(3.0)),
+        rhs: Box::new(Number(4.0)),
+      }),
+      rhs: Box::new(Number(2.0)),
+    };
+    assert_eq!(result, expected);
   }
 
   #[test]

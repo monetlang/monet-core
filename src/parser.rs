@@ -24,6 +24,14 @@ fn parse_prototype<I>() -> impl Parser<I, Output = Prototype>
   )
     .map(|(id, args)| Prototype::new(id, args))
 }
+fn parse_extern<I>() -> impl Parser<I, Output = Prototype>
+  where I: Stream<Token = char>,
+        I::Error: ParseError<I::Token, I::Range, I::Position>,
+{
+  string("extern")
+    .with(spaces())
+    .with(parse_prototype())
+}
 
 /// Parses a function definition
 fn parse_definition<I>() -> impl Parser<I, Output = Function>

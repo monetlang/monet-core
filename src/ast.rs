@@ -1,3 +1,4 @@
+#[derive(Debug, PartialEq)]
 pub(crate) struct Prototype {
   pub name: String,
   pub args: Vec<String>,
@@ -12,6 +13,7 @@ impl Prototype {
   }
 }
 
+#[derive(Debug, PartialEq)]
 pub(crate) struct Function {
   pub prototype: Prototype,
   pub body: Expr,

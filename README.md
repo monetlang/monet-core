@@ -4,21 +4,25 @@ This is an experimental language parser for native FVM WASM.
 
 ```ruby
 
-when Deposit {
+when
+  Deposit {
     from: "alice_addr",
     token: {
       name: "Filecoin",
       ticker: "FIL",
       amount: 100
     }
+  } with {
+    to: "alice_addr",
+    name: "Wrapped Filecoin",
+    comm: 0.1
   } then
-
     pay {
-      to: "alice_addr",
+      to,
       token: {
-        name: "Wrapped Filecoin",
+        name,
         ticker: "WFIL",
-        amount: 90
+        amount: 100 - 100 * comm
       }
     }
 
@@ -27,7 +31,7 @@ when Deposit {
       token: {
         name: "Wrapped Filecoin,
         ticker: "WFIL",
-        amount: 10
+        amount: 100 * comm
       }
     }
 
@@ -44,6 +48,23 @@ when Deposit {
         extra_params_version: 123
       }
     }
+
+    close {
+      duration: 1000000
+    }
   }
+
+  Deposit { from: "bob_addr" } then close
+
+  Deposit { 
+    from: "alice_addr",
+    token: with {
+      token
+    }
+  } then
+    pay {
+      to: "alice_addr",
+      token
+    }
 
 ```

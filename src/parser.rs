@@ -2,13 +2,41 @@ use combine::error::Token;
 use combine::parser::choice::or;
 use combine::parser::combinator::Map;
 use combine::{optional, token};
-use combine::parser::char::{spaces, digit, char, letter};
+use combine::parser::char::{spaces, digit, char, letter, string};
 use combine::{attempt, between, choice, many, many1, sep_by, ParseError, Parser};
 use combine::parser::repeat::chainl1;
 use combine::stream::Stream;
 use combine::parser;
 
-use crate::ast::Expr;
+use crate::ast::{Expr, Prototype, Function};
+
+fn parse_prototype<I>() -> impl Parser<I, Output = Prototype>
+  where I: Stream<Token = char>,
+        I::Error: ParseError<I::Token, I::Range, I::Position>,
+{
+  (
+    many1(choice((letter(), digit(), char('_')))),
+    between(
+      char('('),
+      char(')'),
+      sep_by(many1(choice((letter(), digit(), char('_')))), char(' '))
+    )
+  )
+    .map(|(id, args)| Prototype::new(id, args))
+}
+
+fn parse_definition<I>() -> impl Parser<I, Output = Function>
+  where I: Stream<Token = char>,
+        I::Error: ParseError<I::Token, I::Range, I::Position>,
+{
+  (
+    string("def"),
+    spaces(),
+    parse_prototype(),
+    expression_parser()
+  )
+    .map(|(_, _, proto, body)| Function::new(proto, body))
+}
 
 fn parse_identifier_expr<I>() -> impl Parser<I, Output = Expr>
   where I: Stream<Token = char>,
@@ -40,7 +68,8 @@ where
     I: Stream<Token = char>,
     I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
-  between(char('('), char(')'), expr())
+  // between(char('('), char(')'), expr())
+  between(char('('), char(')'), expr_parser())
 }
 
 fn integer_part<I>() -> impl Parser<I, Output = f64>
@@ -145,27 +174,27 @@ where
     I: Stream<Token = char>,
     I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
-    let number_expr = parse_number_expr();
-    let paren_expr = between(char('('), char(')'), expr_parser());
+    // let number_expr = parse_number_expr();
+    // let paren_expr = between(char('('), char(')'), expr_parser());
     let factor = spaces()
-      .with(choice((paren_expr, number_expr)))
+      .with(parse_primary())
+      // .with(choice((paren_expr, number_expr)))
       .skip(spaces());
+
+    let lt = token::<I>('<').map(|c| create_binop!(c));
 
     let div = token::<I>('/').map(|c| create_binop!(c));
     let mul = token::<I>('*').map(|c| create_binop!(c));
 
-    // let op1 = div.or(mul);
+    let term = chainl1(chainl1(chainl1(factor, lt), div), mul);
 
-    let term = chainl1(chainl1(factor, div), mul);
-    // let term = chainl1(factor, op1);
+    // let term = chainl1(chainl1(factor, div), mul);
 
     let sub = token::<I>('-').map(|c| create_binop!(c));
     let add = token::<I>('+').map(|c| create_binop!(c));
 
-    // let op2 = choice((sub, add));
-
     let expr = chainl1(chainl1(term, sub), add);
-    // spaces().with(expr).skip(spaces())
+
     expr
 }
 
@@ -173,7 +202,45 @@ where
 #[cfg(test)]
 mod tests {
   use combine::Parser;
+  use crate::ast::*;
   use super::*;
+  use Expr::*;
+
+  #[test]
+  fn test_lt_op_precedence() {
+    use Expr::{Number, BinOp};
+
+    let result = expression_parser().parse("3.0 < 4.0 * 2.0").unwrap().0;
+    let expected = BinOp {
+      op: '*',
+      lhs: Box::new(BinOp {
+        op: '<',
+        lhs: Box::new(Number(3.0)),
+        rhs: Box::new(Number(4.0)),
+      }),
+      rhs: Box::new(Number(2.0)),
+    };
+
+    assert_eq!(result, expected);
+  }
+
+  #[test]
+  fn test_op_with_var() {
+    use Expr::{Number, BinOp, Variable};
+
+    let result = expression_parser().parse("3.0 + 4.0 * x").unwrap().0;
+    let expected = BinOp {
+      op: '+',
+      lhs: Box::new(Number(3.0)),
+      rhs: Box::new(BinOp {
+        op: '*',
+        lhs: Box::new(Number(4.0)),
+        rhs: Box::new(Variable("x".to_string())),
+      }),
+    };
+
+    assert_eq!(result, expected);
+  }
 
   #[test]
   fn test_sub_and_add_op_precedence() {
@@ -274,11 +341,63 @@ mod tests {
   }
 
   #[test]
+  fn test_parse_prototype() {
+    let result = parse_prototype().parse("foo(x y z)").unwrap().0;
+    let expected = Prototype::new("foo".to_string(), vec!["x".to_string(), "y".to_string(), "z".to_string()]);
+    assert_eq!(result, expected);
+  }
+
+  #[test]
+  fn test_parse_definition() {
+    let result = parse_definition().parse("def foo(x y z) 3.14 + 0.2").unwrap().0;
+    let expected = Function::new(
+      Prototype::new("foo".to_string(), vec!["x".to_string(), "y".to_string(), "z".to_string()]),
+      Expr::BinOp {
+        op: '+',
+        lhs: Box::new(Expr::Number(3.14)),
+        rhs: Box::new(Expr::Number(0.2)),
+      }
+    );
+    assert_eq!(result, expected);
+  }
+
+  #[test]
+  fn test_parse_definition_with_var() {
+
+    use Expr::*;
+
+    let result = parse_definition().parse("def foo(x y z) 3.14 + x * (y - z)").unwrap().0;
+    let expected = Function::new(
+      Prototype::new("foo".to_string(), vec!["x".to_string(), "y".to_string(), "z".to_string()]),
+      BinOp {
+        op: '+',
+        lhs: Box::new(Number(3.14)),
+        rhs: Box::new(BinOp {
+          op: '*',
+          lhs: Box::new(Variable("x".to_string())),
+          rhs: Box::new(BinOp {
+            op: '-',
+            lhs: Box::new(Variable("y".to_string())),
+            rhs: Box::new(Variable("z".to_string())),
+          }),
+        }),
+      }
+    );
+    assert_eq!(result, expected);
+  }
+
+  #[test]
   fn test_identifier() {
     let result = parse_identifier_expr().parse("foo").unwrap().0;
     assert_eq!(result, Expr::Variable("foo".to_string()));
 
     let result = parse_identifier_expr().parse("foo (bar 3.14)").unwrap().0;
+    assert_eq!(result, Expr::Call {
+      callee: "foo".to_string(),
+      args: vec![Expr::Variable("bar".to_string()), Expr::Number(3.14)],
+    });
+
+    let result = parse_identifier_expr().parse("foo(bar 3.14)").unwrap().0;
     assert_eq!(result, Expr::Call {
       callee: "foo".to_string(),
       args: vec![Expr::Variable("bar".to_string()), Expr::Number(3.14)],

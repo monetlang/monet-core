@@ -25,10 +25,12 @@ fn parse_prototype<I>() -> impl Parser<I, Output = Prototype>
     .map(|(id, args)| Prototype::new(id, args))
 }
 
+/// Parses a function definition
 fn parse_definition<I>() -> impl Parser<I, Output = Function>
   where I: Stream<Token = char>,
         I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
+  println!("Parsing a function definition");
   (
     string("def"),
     spaces(),
@@ -380,6 +382,24 @@ mod tests {
             lhs: Box::new(Variable("y".to_string())),
             rhs: Box::new(Variable("z".to_string())),
           }),
+        }),
+      }
+    );
+    assert_eq!(result, expected);
+  }
+
+  #[test]
+  fn test_parse_definition_with_call() {
+    use Expr::*;
+    let result = parse_definition().parse("def foo(x y) x + foo(y 4.0)").unwrap().0;
+    let expected = Function::new(
+      Prototype::new("foo".to_string(), vec!["x".to_string(), "y".to_string()]),
+      BinOp {
+        op: '+',
+        lhs: Box::new(Variable("x".to_string())),
+        rhs: Box::new(Call {
+          callee: "foo".to_string(),
+          args: vec![Variable("y".to_string()), Number(4.0)],
         }),
       }
     );

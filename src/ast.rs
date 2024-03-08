@@ -1,3 +1,5 @@
+use inkwell::values::FloatValue;
+
 #[derive(Debug, PartialEq)]
 pub(crate) struct Prototype {
   pub name: String,

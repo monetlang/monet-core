@@ -1,10 +1,9 @@
 use std::collections::HashMap;
-
 use inkwell::context::Context;
 use inkwell::builder::Builder;
 use inkwell::module::Module;
-use inkwell::values::{BasicValueEnum, PointerValue};
-use inkwell::types::AsTypeRef;
+use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum, PointerValue};
+
 use crate::ast::Expr;
 
 pub struct Compiler<'a, 'ctx> {
@@ -12,7 +11,7 @@ pub struct Compiler<'a, 'ctx> {
   pub builder: &'a Builder<'ctx>,
   pub module: &'a Module<'ctx>,
   // pub function: &'a Function,
-  // variables: HashMap<String, PointerValue<'ctx>>,
+
   variables: HashMap<String, BasicValueEnum<'ctx>>,
   // fn_value_opt: Option<FunctionValue<'ctx>>,
 }
@@ -29,7 +28,35 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
         Some(var) => Ok(*var),
         None => todo!("what!"),
       },
-      Expr::BinOp { op, lhs, rhs } => {
+      Expr::Call { ref callee, ref args } => match self.module.get_function(callee.as_str()) {
+        Some(callee) => {
+          let mut compiled_args = Vec::with_capacity(args.len());
+
+          for args in args {
+            compiled_args.push(self.compile_expr(args)?);
+          }
+
+          let argsv: Vec<BasicMetadataValueEnum> =
+            compiled_args.iter().by_ref().map(|&val| val.into()).collect();
+
+          match self
+            .builder
+            .build_call(callee, argsv.as_slice(), "tmp")
+            .unwrap()
+            .try_as_basic_value()
+            .left()
+            {
+              Some(val) => Ok(val),
+              None => todo!("Invalid call produced."),
+            }
+        }
+        None => todo!("Unknown function"),
+      },
+      Expr::BinOp {
+        op,
+        ref lhs,
+        ref rhs
+      } => {
         let lhs = self.compile_expr(lhs.as_ref())?;
         let rhs = self.compile_expr(rhs.as_ref())?;
         let l = lhs.into_float_value();
@@ -50,53 +77,74 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
     }
   }
 
-  ///// Compiles the specified `Function` into an LLVM `FunctionValue`.
-  // fn compile_fn(&mut self) -> Result<FunctionValue<'ctx>, &'static str> {
-  //   let proto = &self.function.prototype;
-  //   let function = self.compile_prototype(proto)?;
+//     /// Compiles the specified `Prototype` into an extern LLVM `FunctionValue`.
+//     fn compile_prototype(&self, proto: &Prototype) -> Result<FunctionValue<'ctx>, &'static str> {
+//       let ret_type = self.context.f64_type();
+//       let args_types = std::iter::repeat(ret_type)
+//           .take(proto.args.len())
+//           .map(|f| f.into())
+//           .collect::<Vec<BasicMetadataTypeEnum>>();
+//       let args_types = args_types.as_slice();
 
-  //   // got external function, returning only compiled prototype
-  //   if self.function.body.is_none() {
-  //       return Ok(function);
-  //   }
+//       let fn_type = self.context.f64_type().fn_type(args_types, false);
+//       let fn_val = self.module.add_function(proto.name.as_str(), fn_type, None);
 
-  //   let entry = self.context.append_basic_block(function, "entry");
+//       // set arguments names
+//       for (i, arg) in fn_val.get_param_iter().enumerate() {
+//           arg.into_float_value().set_name(proto.args[i].as_str());
+//       }
 
-  //   self.builder.position_at_end(entry);
+//       // finally return built prototype
+//       Ok(fn_val)
+//   }
 
-  //   // update fn field
-  //   self.fn_value_opt = Some(function);
+//   /// Compiles the specified `Function` into an LLVM `FunctionValue`.
+//   fn compile_fn(&mut self) -> Result<FunctionValue<'ctx>, &'static str> {
+//     let proto = &self.function.prototype;
+//     let function = self.compile_prototype(proto)?;
 
-  //   // build variables map
-  //   self.variables.reserve(proto.args.len());
+//     // got external function, returning only compiled prototype
+//     if self.function.body.is_none() {
+//         return Ok(function);
+//     }
 
-  //   for (i, arg) in function.get_param_iter().enumerate() {
-  //       let arg_name = proto.args[i].as_str();
-  //       let alloca = self.create_entry_block_alloca(arg_name);
+//     let entry = self.context.append_basic_block(function, "entry");
 
-  //       self.builder.build_store(alloca, arg).unwrap();
+//     self.builder.position_at_end(entry);
 
-  //       self.variables.insert(proto.args[i].clone(), alloca);
-  //   }
+//     // update fn field
+//     self.fn_value_opt = Some(function);
 
-  //   // compile body
-  //   let body = self.compile_expr(self.function.body.as_ref().unwrap())?;
+//     // build variables map
+//     self.variables.reserve(proto.args.len());
 
-  //   self.builder.build_return(Some(&body)).unwrap();
+//     for (i, arg) in function.get_param_iter().enumerate() {
+//         let arg_name = proto.args[i].as_str();
+//         let alloca = self.create_entry_block_alloca(arg_name);
 
-  //   // return the whole thing after verification and optimization
-  //   if function.verify(true) {
-  //       Ok(function)
-  //   } else {
-  //       unsafe {
-  //           function.delete();
-  //       }
+//         self.builder.build_store(alloca, arg).unwrap();
 
-  //       Err("Invalid generated function.")
-  //   }
-  // }
+//         self.variables.insert(proto.args[i].clone(), alloca);
+//     }
 
-///// Compiles the specified `Function` in the given `Context` and using the specified `Builder` and `Module`.
+//     // compile body
+//     let body = self.compile_expr(self.function.body.as_ref().unwrap())?;
+
+//     self.builder.build_return(Some(&body)).unwrap();
+
+//     // return the whole thing after verification and optimization
+//     if function.verify(true) {
+//         Ok(function)
+//     } else {
+//         unsafe {
+//             function.delete();
+//         }
+
+//         Err("Invalid generated function.")
+//     }
+//   }
+
+// /// Compiles the specified `Function` in the given `Context` and using the specified `Builder` and `Module`.
 //   pub fn compile(
 //     context: &'ctx Context,
 //     builder: &'a Builder<'ctx>,
@@ -106,28 +154,20 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
 //     let mut compiler = Compiler {
 //         context,
 //         builder,
-//         // module,
-//         // function,
-//         // fn_value_opt: None,
+//         module,
+//         function,
+//         fn_value_opt: None,
 //         variables: HashMap::new(),
 //     };
-
 //     compiler.compile_fn()
 //   }
+// }
 }
 
 #[cfg(test)]
 mod tests {
-
-  use std::hash::Hash;
-
-use super::*;
-  use combine::parser::token::Value;
-  use inkwell::context::Context;
-  use inkwell::builder::Builder;
-  use inkwell::llvm_sys::LLVMValue;
-  use inkwell::values::AsValueRef;
-  use crate::ast::Function;
+  use super::*;
+  use inkwell::{context::Context, types::BasicMetadataTypeEnum};
 
   #[test]
   fn test_compile_number() {
@@ -170,6 +210,37 @@ use super::*;
     let result = compiler.compile_expr(&expr).unwrap();
     let s = result.to_string();
     assert_eq!(s, "\"double 1.200000e+00\"".to_string());
+  }
+
+  #[test]
+  fn test_compile_call() {
+    let context = &Context::create();
+    let builder = &context.create_builder();
+    let module = &context.create_module("tmp");
+    let void_type = context.void_type();
+
+    let f64_type: BasicMetadataTypeEnum = context.f64_type().into();
+    let fn_type = context.f64_type().fn_type(&[f64_type, f64_type], false);
+    let basic_block = context.append_basic_block(function1, "fadd");
+    builder.position_at_end(basic_block);
+
+    let variables = HashMap::new();
+
+    let compiler = Compiler {
+      context,
+      builder,
+      module,
+      variables,
+    };
+
+    let expr = Expr::Call {
+      callee: "fadd".to_string(),
+      args: vec![Expr::Number(1.0), Expr::Number(3.0)]
+    };
+
+    let result = compiler.compile_expr(&expr).unwrap();
+    let s = result.to_string();
+    assert_eq!(s, "\"  %tmp = call double @fadd(double 1.000000e+00, double 3.000000e+00)\"".to_string());
   }
 
   #[test]

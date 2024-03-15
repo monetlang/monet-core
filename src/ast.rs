@@ -1,7 +1,7 @@
 use inkwell::values::FloatValue;
 
 #[derive(Debug, PartialEq)]
-pub(crate) struct Prototype {
+pub struct Prototype {
   pub name: String,
   pub args: Vec<String>,
 }
@@ -15,8 +15,18 @@ impl Prototype {
   }
 }
 
-#[derive(Debug, PartialEq)]
-pub(crate) struct Function {
+impl Default for Prototype {
+  fn default() -> Self {
+    Self {
+      name: "tmp".to_string(),
+      args: Vec::new(),
+    }
+  }
+
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct Function {
   pub prototype: Prototype,
   pub body: Expr,
 }
@@ -28,7 +38,7 @@ impl Function {
 }
 
 #[derive(Debug, PartialEq)]
-pub(crate) enum Expr {
+pub enum Expr {
   Number(f64),
   Variable(String),
   BinOp {
@@ -40,4 +50,11 @@ pub(crate) enum Expr {
     callee: String,
     args: Vec<Expr>,
   },
+  None,
+}
+
+impl Default for Expr {
+  fn default() -> Self {
+    Self::None
+  }
 }

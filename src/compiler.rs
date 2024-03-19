@@ -13,8 +13,8 @@ pub struct Compiler<'a, 'ctx> {
   pub module: &'a Module<'ctx>,
   pub function: &'a Function,
 
-  variables: HashMap<String, PointerValue<'ctx>>,
-  fn_value_opt: Option<FunctionValue<'ctx>>,
+  pub(crate) variables: HashMap<String, PointerValue<'ctx>>,
+  pub(crate) fn_value_opt: Option<FunctionValue<'ctx>>,
 }
 
 impl<'a, 'ctx> Compiler<'a, 'ctx> {
@@ -252,6 +252,22 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
 // }
 }
 
+// #[macro_export]
+macro_rules! create_compiler {
+  ($c:expr, $s: expr) => {
+    Compiler {
+      context: $c,
+      builder: &$c.create_builder(),
+      module: &$c.create_module($s),
+      variables: HashMap::new(),
+      function: &Function::default(),
+      fn_value_opt: None,
+    }
+  }
+}
+
+pub(crate) use create_compiler;
+
 #[cfg(test)]
 mod tests {
   use core::f64;
@@ -259,19 +275,6 @@ mod tests {
 use super::*;
   use inkwell::{context::Context, types::BasicMetadataTypeEnum, AddressSpace};
   use inkwell::values::InstructionOpcode;
-
-  macro_rules! create_compiler {
-    ($c:expr, $s: expr) => {
-      Compiler {
-        context: $c,
-        builder: &$c.create_builder(),
-        module: &$c.create_module($s),
-        variables: HashMap::new(),
-        function: &Function::default(),
-        fn_value_opt: None,
-      }
-    }
-  }
 
   #[test]
   fn test_compile_number() {

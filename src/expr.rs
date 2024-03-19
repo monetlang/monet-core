@@ -1,3 +1,5 @@
+#[macro_use]
+
 use std::collections::HashMap;
 use combine::many;
 use combine::parser;
@@ -216,7 +218,7 @@ fn quoted_string<I>() -> impl Parser<I, Output = String>
     .map(|chars: Vec<char>| chars.into_iter().collect())
 }
 
-fn decimal<I>() -> impl Parser<I, Output = f64>
+pub(crate) fn decimal<I>() -> impl Parser<I, Output = f64>
   where I: Stream<Token = char>,
         I::Error: ParseError<I::Token, I::Range, I::Position>,
 {

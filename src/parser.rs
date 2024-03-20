@@ -134,7 +134,7 @@ fn expr_<'a, I>() -> impl Parser<I, Output = Expr>
 }
 
 parser!{
-  fn expr[I]()(I) -> Expr
+  pub(crate) fn expr[I]()(I) -> Expr
   where [I: Stream<Token = char>]
   {
     expr_()
@@ -142,7 +142,7 @@ parser!{
 }
 
 parser!{
-  fn expr_parser[I]()(I) -> Expr
+  pub(crate) fn expr_parser[I]()(I) -> Expr
   where [I: Stream<Token = char>]
   {
     expression_parser()
@@ -179,16 +179,13 @@ macro_rules! create_binop {
   }
 }
 
-fn expression_parser<I>() -> impl Parser<I, Output = Expr>
+pub fn expression_parser<I>() -> impl Parser<I, Output = Expr>
 where
     I: Stream<Token = char>,
     I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
-    // let number_expr = parse_number_expr();
-    // let paren_expr = between(char('('), char(')'), expr_parser());
     let factor = spaces()
       .with(parse_primary())
-      // .with(choice((paren_expr, number_expr)))
       .skip(spaces());
 
     let lt = token::<I>('<').map(|c| create_binop!(c));
@@ -196,14 +193,14 @@ where
     let div = token::<I>('/').map(|c| create_binop!(c));
     let mul = token::<I>('*').map(|c| create_binop!(c));
 
-    let term = chainl1(chainl1(chainl1(factor, lt), div), mul);
+    // let term = chainl1(chainl1(chainl1(factor, lt), div), mul);
 
-    // let term = chainl1(chainl1(factor, div), mul);
+    let term = chainl1(chainl1(factor, div), mul);
 
     let sub = token::<I>('-').map(|c| create_binop!(c));
     let add = token::<I>('+').map(|c| create_binop!(c));
 
-    let expr = chainl1(chainl1(term, sub), add);
+    let expr = chainl1(chainl1(chainl1(term, sub), add), lt);
 
     expr
 }
@@ -222,13 +219,13 @@ mod tests {
 
     let result = expression_parser().parse("3.0 < 4.0 * 2.0").unwrap().0;
     let expected = BinOp {
-      op: '*',
-      lhs: Box::new(BinOp {
-        op: '<',
-        lhs: Box::new(Number(3.0)),
-        rhs: Box::new(Number(4.0)),
+      op: '<',
+      lhs: Box::new(Number(3.0)),
+      rhs: Box::new(BinOp {
+        op: '*',
+        lhs: Box::new(Number(4.0)),
+        rhs: Box::new(Number(2.0)),
       }),
-      rhs: Box::new(Number(2.0)),
     };
 
     assert_eq!(result, expected);

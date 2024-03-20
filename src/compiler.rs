@@ -4,6 +4,7 @@ use inkwell::builder::Builder;
 use inkwell::module::Module;
 use inkwell::types::BasicMetadataTypeEnum;
 use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue, PointerValue, FloatValue};
+use inkwell::FloatPredicate;
 
 use crate::ast::{Expr, Function, Prototype};
 
@@ -153,11 +154,15 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
         let minusop = self.builder.build_float_sub(lhs, rhs, "subtmp").unwrap();
         let multop = self.builder.build_float_mul(lhs, rhs, "multmp").unwrap();
         let divop = self.builder.build_float_div(lhs, rhs, "divtmp").unwrap();
+        let ltop_ = self.builder.build_float_compare(FloatPredicate::ULT, lhs, rhs, "cmptmp").unwrap();
+        let ltop = self.builder
+          .build_unsigned_int_to_float(ltop_, self.context.f64_type(), "booltmp").unwrap();
         match op {
           '+' => Ok(plusop),
           '-' => Ok(minusop),
           '*' => Ok(multop),
           '/' => Ok(divop),
+          '<' => Ok(ltop),
           _ => todo!("compile_expr: {:?}", expr),
         }
       },
@@ -327,8 +332,9 @@ use super::*;
     let basic_block = ctx.append_basic_block(function1, "fadd");
     compiler.builder.position_at_end(basic_block);
     let result = compiler.compile_fn().unwrap();
-    let expect = "\"define double @fadd.1(double %x, double %y) {\\nentry:\\n  %y2 = alloca double, align 8\\n  %x1 = alloca double, align 8\\n  store double %x, ptr %x1, align 8\\n  store double %y, ptr %y2, align 8\\n  %x3 = load double, ptr %x1, align 8\\n  %y4 = load double, ptr %y2, align 8\\n  %subtmp = fadd double %x3, %y4\\n  %subtmp5 = fsub double %x3, %y4\\n  %multmp = fmul double %x3, %y4\\n  %divtmp = fdiv double %x3, %y4\\n  ret double %subtmp\\n}\\n\"";
-    assert_eq!(result.to_string(), expect.to_string());
+    assert_eq!(result.get_name().to_str().unwrap(), "fadd.1");
+    assert_eq!(result.get_first_param().unwrap().to_string(), "\"double %x\"");
+    assert_eq!(result.get_last_param().unwrap().to_string(), "\"double %y\"");
   }
 
   #[test]

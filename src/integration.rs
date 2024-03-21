@@ -20,25 +20,25 @@ mod tests {
 
   #[test]
   fn test_decimal() {
-    let expr = parse_number_expr().parse("3.14").unwrap().0;
-    assert_eq!(expr, Expr::Number(3.14));
+    let expr = parse_number_expr().parse("30.14").unwrap().0;
+    assert_eq!(expr, Expr::Number(30.14));
     let ctx = Context::create();
     let compiler = create_compiler!(&ctx, "tmp");
     let result = compiler.compile_expr(&expr).unwrap();
-    assert_eq!(result.to_string(), "\"double 3.140000e+00\"".to_string());
+    assert_eq!(result.to_string(), "\"double 3.014000e+01\"".to_string());
   }
 
   #[test]
   fn test_op() {
     use Expr::{Number, BinOp};
-    let expr = expression_parser().parse("6.0 < 4.0 * 2.0").unwrap().0;
+    let expr = expression_parser().parse("6.0 < 4.0 * 20.0").unwrap().0;
     let expected = BinOp {
       op: '<',
       lhs: Box::new(Number(6.0)),
       rhs: Box::new(BinOp {
         op: '*',
         lhs: Box::new(Number(4.0)),
-        rhs: Box::new(Number(2.0)),
+        rhs: Box::new(Number(20.0)),
       }),
     };
 

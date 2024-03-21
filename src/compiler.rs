@@ -114,7 +114,12 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
 
   pub(crate) fn compile_expr(&self, expr: &Expr) -> Result<FloatValue<'ctx>, &'static String> {
     match expr {
-      Expr::Number(n) => Ok(self.context.f64_type().const_float(*n)),
+      Expr::Number(n) => {
+        let f64_type = self.context.f64_type();
+        let llvm_num = f64_type.const_float(*n);
+        println!("llvm_num: {}", llvm_num.to_string());
+        Ok(llvm_num)
+      },
       Expr::Variable(ref name) => match self.variables.get(name.as_str()) {
         Some(var) => Ok(self.build_load(*var, &name).into_float_value()),
         None => todo!("what!"),
@@ -148,6 +153,11 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
         ref lhs,
         ref rhs
       } => {
+        // let fn_type = self.context.f64_type().fn_type(&[], false);
+        // let function = self.module.add_function("my_function", fn_type, None);
+        // let basic_block = self.context.append_basic_block(function, "entry");
+        // self.builder.position_at_end(basic_block);
+
         let lhs = self.compile_expr(lhs.as_ref())?;
         let rhs = self.compile_expr(rhs.as_ref())?;
         let plusop = self.builder.build_float_add(lhs, rhs, "subtmp").unwrap();
@@ -257,6 +267,13 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
 // }
 }
 
+pub(crate) fn set_compiler_hook(c: &mut Compiler) {
+  let fn_type = c.context.f64_type().fn_type(&[], false);
+  let function = c.module.add_function("my_function", fn_type, None);
+  let basic_block = c.context.append_basic_block(function, "entry");
+  c.builder.position_at_end(basic_block);
+}
+
 // #[macro_export]
 macro_rules! create_compiler {
   ($c:expr, $s: expr) => {
@@ -331,7 +348,7 @@ use super::*;
     let function1 = compiler.module.add_function("fadd", fn_type, None);
     let basic_block = ctx.append_basic_block(function1, "fadd");
     compiler.builder.position_at_end(basic_block);
-    let result = compiler.compile_fn().unwrap();
+    let result = compiler.compile_fn().expect("Failed to compile function");
     assert_eq!(result.get_name().to_str().unwrap(), "fadd.1");
     assert_eq!(result.get_first_param().unwrap().to_string(), "\"double %x\"");
     assert_eq!(result.get_last_param().unwrap().to_string(), "\"double %y\"");

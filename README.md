@@ -2,10 +2,21 @@
 
 This is an experimental language parser for native FVM WASM.
 
+# run
+
+```shell
+> cargo run
+>> monet> 2.0 < 4.0 * 3.0
+>> "\"double 1.000000e+00\""
+>> monet> 4.0 < 3.0
+>> "\"double 0.000000e+00\""
+```
+
+# syntax(?)
+
 ```ruby
 
-when
-  Deposit {
+when Deposit {
     from: "alice_addr",
     token: {
       name: "Filecoin",
@@ -24,16 +35,16 @@ when
         ticker: "WFIL",
         amount: 100 - 100 * comm
       }
-    }
-
-    pay {
+    } with {
       to: "bob_addr",
       token: {
-        name: "Wrapped Filecoin,
+        name: "Wrapped Filecoin",
         ticker: "WFIL",
         amount: 100 * comm
       }
     }
+
+    pay { to, token }
 
     propose {
       deal_request: {

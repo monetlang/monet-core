@@ -215,8 +215,6 @@ mod tests {
 
   #[test]
   fn test_lt_op_precedence() {
-    use Expr::{Number, BinOp};
-
     let result = expression_parser().parse("3.0 < 4.0 * 2.0").unwrap().0;
     let expected = BinOp {
       op: '<',
@@ -233,8 +231,6 @@ mod tests {
 
   #[test]
   fn test_op_with_var() {
-    use Expr::{Number, BinOp, Variable};
-
     let result = expression_parser().parse("3.0 + 4.0 * x").unwrap().0;
     let expected = BinOp {
       op: '+',
@@ -251,8 +247,6 @@ mod tests {
 
   #[test]
   fn test_sub_and_add_op_precedence() {
-    use Expr::{Number, BinOp};
-
     let result = expression_parser().parse("3.0 + 4.0 - 2.0").unwrap().0;
     let expected = BinOp {
       op: '+',
@@ -269,9 +263,6 @@ mod tests {
 
   #[test]
   fn test_div_and_mul_op_precedence() {
-
-    use Expr::{Number, BinOp};
-
     let result = expression_parser().parse("3.0 * 4.0 / 2.0").unwrap().0;
     let expected = BinOp {
       op: '*',
@@ -289,8 +280,6 @@ mod tests {
 
   #[test]
   fn test_all_op_precedence() {
-    use Expr::{Number, BinOp};
-
     let result = expression_parser().parse("3.0 + 4.0 * 2.0 / 2.0 - 1.0").unwrap().0;
     let expected = BinOp {
       op: '+',
@@ -314,8 +303,6 @@ mod tests {
 
   #[test]
   fn test_op_with_paren() {
-    use Expr::{Number, BinOp};
-
     let result = expression_parser().parse("(3.0 + 4.0) * 2.0").unwrap().0;
     let expected = BinOp {
       op: '*',
@@ -330,15 +317,37 @@ mod tests {
   }
 
   #[test]
+  fn test_simple_number() {
+    let result = expression_parser().parse("32.1").unwrap().0;
+    let expected = Number(32.1);
+    assert_eq!(result, expected);
+  }
+
+  #[test]
+  fn test_simple_op() {
+    let result = expression_parser().parse("32.1 + 20.2").unwrap().0;
+    let expected = BinOp {
+      op: '+',
+      lhs: Box::new(Number(32.1)),
+      rhs: Box::new(Number(20.2)),
+    };
+    assert_eq!(result, expected);
+  }
+
+  #[test]
   fn test_parse_primary() {
     let result = parse_primary().parse(" 3.14  ").unwrap().0;
     assert_eq!(result, Expr::Number(3.14));
+    let result = parse_primary().parse("44.2 ").unwrap().0;
+    assert_eq!(result, Expr::Number(44.2));
   }
 
   #[test]
   fn test_number() {
     let result = parse_number_expr().parse("3.14").unwrap().0;
     assert_eq!(result, Expr::Number(3.14));
+    let result = parse_number_expr().parse("30.0").unwrap().0;
+    assert_eq!(result, Expr::Number(30.0));
   }
 
   #[test]

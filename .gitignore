@@ -1,2 +1,5 @@
 /target
 *.mt
+*.bc
+*.ll
+*.wasm

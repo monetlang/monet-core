@@ -117,7 +117,6 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
       Expr::Number(n) => {
         let f64_type = self.context.f64_type();
         let llvm_num = f64_type.const_float(*n);
-        println!("llvm_num: {}", llvm_num.to_string());
         Ok(llvm_num)
       },
       Expr::Variable(ref name) => match self.variables.get(name.as_str()) {
@@ -276,7 +275,7 @@ pub(crate) fn set_compiler_hook(c: &mut Compiler) {
 
 // #[macro_export]
 macro_rules! create_compiler {
-  ($c:expr, $s: expr) => {
+  ($c:expr, $s:expr) => {
     Compiler {
       context: $c,
       builder: &$c.create_builder(),

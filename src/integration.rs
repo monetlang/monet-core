@@ -12,8 +12,10 @@ use combine::stream::Stream;
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::ast::{Expr, Function};
-  use crate::parser::{parse_number_expr, expression_parser};
+  use crate::ast::{Expr, Function, Prototype};
+  use inkwell::types::BasicMetadataTypeEnum;
+use Expr::*;
+  use crate::parser::{parse_number_expr, expression_parser, parse_definition};
   use crate::compiler::Compiler;
   use crate::compiler::create_compiler;
   use inkwell::context::Context;
@@ -27,10 +29,32 @@ mod tests {
     let result = compiler.compile_expr(&expr).unwrap();
     assert_eq!(result.to_string(), "\"double 3.014000e+01\"".to_string());
   }
+  #[test]
+  fn test_fn() {
+    let result = parse_definition().parse("def foo(x y) x + foo(y 4.0)").unwrap().0;
+    let expected = Function::new(
+      Prototype::new("foo".to_string(), vec!["x".to_string(), "y".to_string()]),
+      BinOp {
+        op: '+',
+        lhs: Box::new(Variable("x".to_string())),
+        rhs: Box::new(Call {
+          callee: "foo".to_string(),
+          args: vec![Variable("y".to_string()), Number(4.0)],
+        }),
+      }
+    );
+    assert_eq!(result, expected);
+    let ctx = Context::create();
+    let mut compiler = create_compiler!(&ctx, "tmp");
+    compiler.function = &result;
+    let result = compiler.compile_fn().expect("Failed to compile function");
+    assert_eq!(result.get_name().to_str().unwrap(), "foo");
+    assert_eq!(result.get_first_param().unwrap().to_string(), "\"double %x\"");
+    assert_eq!(result.get_last_param().unwrap().to_string(), "\"double %y\"");
+  }
 
   #[test]
   fn test_op() {
-    use Expr::{Number, BinOp};
     let expr = expression_parser().parse("6.0 < 4.0 * 20.0").unwrap().0;
     let expected = BinOp {
       op: '<',

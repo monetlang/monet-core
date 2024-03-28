@@ -50,11 +50,11 @@ pub enum Expr {
     callee: String,
     args: Vec<Expr>,
   },
-  None,
+  Nothing,
 }
 
 impl Default for Expr {
   fn default() -> Self {
-    Self::None
+    Self::Nothing
   }
 }

@@ -48,7 +48,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
     let function = self.compile_prototype(proto)?;
 
     // got external function, returning only compiled prototype
-    if let Expr::None = self.function.body {
+    if let Expr::Nothing = self.function.body {
       return Ok(function);
     }
 
@@ -64,6 +64,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
     self.fn_value_opt = Some(function);
 
     // build variables map
+    _ = self.variables.drain();
     self.variables.reserve(proto.args.len());
 
     for (i, arg) in function.get_param_iter().enumerate() {
@@ -77,7 +78,6 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
 
     // compile body
     let body = self.compile_expr(&self.function.body).unwrap();
-
     self.builder.build_return(Some(&body)).unwrap();
 
     // return the whole thing after verification and optimization
@@ -268,7 +268,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
 
 pub(crate) fn set_compiler_hook(c: &mut Compiler) {
   let fn_type = c.context.f64_type().fn_type(&[], false);
-  let function = c.module.add_function("my_function", fn_type, None);
+  let function = c.module.add_function("main", fn_type, None);
   let basic_block = c.context.append_basic_block(function, "entry");
   c.builder.position_at_end(basic_block);
 }
@@ -291,10 +291,8 @@ pub(crate) use create_compiler;
 
 #[cfg(test)]
 mod tests {
-  use core::f64;
-
-use super::*;
-  use inkwell::{context::Context, types::BasicMetadataTypeEnum, AddressSpace};
+  use super::*;
+  use inkwell::{context::Context, types::BasicMetadataTypeEnum};
   use inkwell::values::InstructionOpcode;
 
   #[test]

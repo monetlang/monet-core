@@ -11,7 +11,8 @@ use std::path::Path;
 use std::{env, fs, io};
 use std::collections::HashMap;
 use combine::Parser;
-use crate::parser::expression_parser;
+use inkwell::targets::TargetTriple;
+use crate::parser::{expression_parser, parse_definition};
 use crate::ast::Function;
 use crate::compiler::Compiler;
 use inkwell::context::Context;
@@ -41,11 +42,12 @@ fn main() {
         let txt = fs::read_to_string(input)
             .expect("Should have been able to read the file");
 
-        let expr = expression_parser().parse(txt.as_str()).unwrap().0;
-        let ctx = Context::create();
+        let function = parse_definition().parse(txt.as_str()).unwrap().0;        let ctx = Context::create();
         let mut compiler = compiler::create_compiler!(&ctx, "tmp");
         set_compiler_hook(&mut compiler);
-        let _result = compiler.compile_expr(&expr).unwrap();
+
+        compiler.function = &function;
+        let result = compiler.compile_fn().unwrap();
 
         // let _output_file = File::create(output.as_str())
         //     .expect("Should be able to create file");

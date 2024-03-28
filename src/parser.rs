@@ -34,7 +34,7 @@ fn parse_extern<I>() -> impl Parser<I, Output = Prototype>
 }
 
 /// Parses a function definition
-fn parse_definition<I>() -> impl Parser<I, Output = Function>
+pub fn parse_definition<I>() -> impl Parser<I, Output = Function>
   where I: Stream<Token = char>,
         I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
@@ -373,6 +373,12 @@ mod tests {
         lhs: Box::new(Expr::Number(3.14)),
         rhs: Box::new(Expr::Number(0.2)),
       }
+    );
+    assert_eq!(result, expected);
+    let result = parse_definition().parse("def foo() 3.14 + 0.2").unwrap().0;
+    let expected = Function::new(
+      Prototype::new("foo".to_string(), vec![]),
+      Expr::BinOp { op: '+', lhs: Box::new(Expr::Number(3.14)), rhs: Box::new(Expr::Number(0.2)) },
     );
     assert_eq!(result, expected);
   }

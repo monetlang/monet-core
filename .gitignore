@@ -2,4 +2,12 @@
 *.mt
 *.bc
 *.ll
+*.c
+*.h
 *.wasm
+*.wat
+*.js
+*.ts
+*.svelte
+*.html
+playground

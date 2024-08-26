@@ -1,5 +1,7 @@
 [package]
-name = "combine-test"
+name = "monet"
+authors = ["pan@fil.org"]
+publish = false
 version = "0.1.0"
 edition = "2021"
 
@@ -8,7 +10,12 @@ edition = "2021"
 [dependencies]
 cid = "0.11.0"
 combine = "4.6.6"
-fvm_sdk = "4.1.2"
-fvm_shared = "4.1.2"
-inkwell = { version = "0.4.0", features = ["target-webassembly", "llvm17-0"] }
-rand = "0.8.5"
+wasm-bindgen = "0.2.93"
+#fvm_sdk = "4.1.2"
+#fvm_shared = "4.1.2"
+# inkwell = { version = "0.4.0", default-features = false, features = ["target-webassembly", "llvm17-0"] }
+# rand = "0.8.5"
+
+[lib]
+crate-type = ["cdylib"]
+

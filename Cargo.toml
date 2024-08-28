@@ -16,6 +16,11 @@ wasm-bindgen = "0.2.93"
 # inkwell = { version = "0.4.0", default-features = false, features = ["target-webassembly", "llvm17-0"] }
 # rand = "0.8.5"
 
+[build]
+script = "build.rs"
+
 [lib]
+name = "monet_lib"
+path = "src/lib.rs"
 crate-type = ["cdylib"]
 

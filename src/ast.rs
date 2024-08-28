@@ -109,6 +109,35 @@ pub enum Expr {
 }
 
 impl Expr {
+  pub fn eval(&self) -> f64 {
+    match self {
+      Expr::Number(n) => *n,
+      Expr::Variable(_) => 0.0,
+      Expr::BinOp { op, lhs, rhs } => {
+        let l = lhs.eval();
+        let r = rhs.eval();
+        match op {
+          '+' => l + r,
+          '-' => l - r,
+          '*' => l * r,
+          '/' => l / r,
+          _ => 0.0,
+        }
+      },
+      Expr::Call { callee, args } => {
+        let callee = callee.clone();
+        let args = args.iter().map(|arg| arg.eval()).collect::<Vec<f64>>();
+        match callee.as_str() {
+          "add" => args[0] + args[1],
+          "sub" => args[0] - args[1],
+          "mul" => args[0] * args[1],
+          "div" => args[0] / args[1],
+          _ => 0.0,
+        }
+      },
+      Expr::Nothing => 0.0,
+    }
+  }
   pub fn wrap(&self) -> ExprWrapper {
     let default = ExprWrapper::default();
     match self {

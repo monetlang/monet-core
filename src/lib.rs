@@ -52,14 +52,14 @@ macro_rules! create_main {
     ($body:block) => {
         #[wasm_bindgen(start)]
         pub fn main() {
-          alert("WASM hello!");
-          alert($body);
+          alert("Hello from Monet!");
+          alert(&format!("The result of expression.mt is {}.", $body));
         }
     };
 }
 
 create_main!({
-  &gen_expr().to_string()
+  &gen_expr().eval()
 });
 
 // #[wasm_bindgen(start)]

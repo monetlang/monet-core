@@ -4,7 +4,7 @@ mod ast;
 mod backend;
 pub mod parser;
 
-use ast::ExprWrapper;
+use backend::wasm;
 use wasm_bindgen::prelude::*;
 use crate::ast::Expr;
 use crate::parser::expression_parser;
@@ -15,6 +15,7 @@ use std::env;
 #[wasm_bindgen]
 extern "C" {
     fn alert(s: &str);
+    fn update_dom(e: &str, val: &str, target: &str);
 }
 
 #[wasm_bindgen]
@@ -49,18 +50,23 @@ macro_rules! read_monet {
 
 #[macro_export]
 macro_rules! create_main {
-    ($body:block) => {
+    ($body1:expr, $body2:expr, $body3: expr) => {
         #[wasm_bindgen(start)]
         pub fn main() {
           alert("Hello from Monet!");
-          alert(&format!("The result of expression.mt is {}.", $body));
+          // alert(&format!("The result of expression.mt is {}.", $body));
+          update_dom(
+            &format!("{}", $body1), 
+            &format!("{}", $body2), 
+            &format!("{}", $body3)
+          );
+          // alert(&format!("{}", $body));
         }
     };
 }
 
-create_main!({
-  &gen_expr().eval()
-});
+create_main!(EXPR, &gen_expr().eval(), TARGET_FILE);
+
 
 // #[wasm_bindgen(start)]
 // pub fn main() {

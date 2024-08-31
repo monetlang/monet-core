@@ -6,8 +6,7 @@ use parser::ast::Expr;
 use combine::Parser;
 
 fn main() {
-  let default_file = "src/expression.mt";
-  let file_path = std::env::var("TARGET_FILE").unwrap_or(default_file.to_string());
+  let file_path = std::env::var("TARGET_FILE").expect("Missing TARGET_FILE env variable");
   let path = file_path.clone();
 
   /////////// Tell Rust to re-run this build script //////////////
@@ -17,7 +16,6 @@ fn main() {
 
   let out_dir = env::var("OUT_DIR").unwrap();
   let dest_path = PathBuf::from(out_dir).join("gen.rs");
-
   let content = fs::read_to_string(file_path).unwrap();
   let ast: Expr = expression_parser().parse(content.trim()).unwrap().0;
   fs::write(&dest_path, format!("

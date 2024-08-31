@@ -107,7 +107,9 @@ fn decimal<I>() -> impl Parser<I, Output = f64>
   optional(integer_part())
     .skip(char('.'))
     .and(optional(decimal_part()))
-    .map(|(integer, decimal)| integer.unwrap_or(0.0) + decimal.unwrap_or(0.0))
+    .map(|(integer, decimal)| integer
+    .unwrap_or(0.0) + decimal
+    .unwrap_or(0.0))
 }
 
 

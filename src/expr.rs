@@ -371,7 +371,7 @@ use super::*;
       Expr::QuotedString("apple".to_string()),
       Expr::QuotedString("orange".to_string()),
       Expr::QuotedString("banana".to_string()),
-    
+
     ]));
     assert_eq!(result, expected);
     let result = dict().parse("{hello: 123, world: 50, hey_12: 0.12}").unwrap().0;
@@ -680,6 +680,8 @@ use super::*;
     let op3 = Op{ f: propose, arg: Some(Expr::Dict(pargs)) };
 
     let expected = (event_op, vec![op1, op2, op3]);
+
+    println!("{:#?}", e);
     assert_eq!(e, expected);
   }
 

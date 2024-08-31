@@ -10,4 +10,5 @@
 *.ts
 *.svelte
 *.html
+*.bak
 playground

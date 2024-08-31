@@ -14,7 +14,7 @@ mod tests {
   use super::*;
   use crate::ast::{Expr, Function, Prototype};
   use inkwell::types::BasicMetadataTypeEnum;
-use Expr::*;
+  use Expr::*;
   use crate::parser::{parse_number_expr, expression_parser, parse_definition};
   use crate::compiler::Compiler;
   use crate::compiler::create_compiler;
@@ -55,7 +55,8 @@ use Expr::*;
 
   #[test]
   fn test_op() {
-    let expr = expression_parser().parse("6.0 < 4.0 * 20.0").unwrap().0;
+    let s: String = "6.0 < 4.0 * 20.0".to_string();
+    let expr = expression_parser().parse(s.as_str()).unwrap().0;
     let expected = BinOp {
       op: '<',
       lhs: Box::new(Number(6.0)),

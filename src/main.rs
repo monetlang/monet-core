@@ -5,7 +5,7 @@ mod expr;
 mod op;
 mod parser;
 mod ast;
-mod wasm;
+// mod wasm;
 // mod compiler;
 // mod integration;
 mod backend;

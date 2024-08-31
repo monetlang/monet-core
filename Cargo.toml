@@ -1,20 +1,19 @@
 [package]
-name = "monet"
+name = "monet_core"
 authors = ["pan@fil.org"]
 publish = false
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 cid = "0.11.0"
 combine = "4.6.6"
 wasm-bindgen = "0.2.93"
-#fvm_sdk = "4.1.2"
-#fvm_shared = "4.1.2"
-# inkwell = { version = "0.4.0", default-features = false, features = ["target-webassembly", "llvm17-0"] }
-# rand = "0.8.5"
+parser = {path = "../parser"}
+
+[build-dependencies]
+combine = "4.6.6"
+parser = {path = "../parser"}
 
 [build]
 script = "build.rs"

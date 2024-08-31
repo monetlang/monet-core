@@ -4,7 +4,7 @@ mod ast;
 mod backend;
 pub mod parser;
 
-use backend::wasm;
+// use backend::wasm;
 use wasm_bindgen::prelude::*;
 use crate::ast::Expr;
 use crate::parser::expression_parser;
@@ -54,25 +54,16 @@ macro_rules! create_main {
         #[wasm_bindgen(start)]
         pub fn main() {
           alert("Hello from Monet!");
-          // alert(&format!("The result of expression.mt is {}.", $body));
           update_dom(
-            &format!("{}", $body1), 
-            &format!("{}", $body2), 
+            &format!("{}", $body1),
+            &format!("{}", $body2),
             &format!("{}", $body3)
           );
-          // alert(&format!("{}", $body));
         }
     };
 }
 
 create_main!(EXPR, &gen_expr().eval(), TARGET_FILE);
-
-
-// #[wasm_bindgen(start)]
-// pub fn main() {
-//   alert("WASM test!");
-//   alert(&DATA.to_string());
-// }
 
 #[cfg(test)]
 mod tests {
@@ -100,16 +91,3 @@ mod tests {
     assert_eq!(expr, expect);
   }
 }
-
-
-// #[wasm_bindgen(start)]
-// pub fn main() {
-//   alert(&format!("hello from Rust!"));
-//   let e = translate_to_str(Expr::BinOp {
-//     op: '+',
-//     lhs: Box::new(Expr::Number(42.0)),
-//     rhs: Box::new(Expr::Number(3.14)),
-//   });
-//   alert(&e);
-// }
-
